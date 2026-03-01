@@ -32,6 +32,8 @@ TECH STACK RECOMMENDATION FOR PRODUCTION:
 <title>Boundary Boys — Cricket Fantasy</title>
 <link rel="preconnect" href="https://fonts.googleapis.com/">
 <link href="./Boundary Boys — Cricket Fantasy_2.21 PM_files/css2" rel="stylesheet">
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ============================================================
    DESIGN SYSTEM — CSS CUSTOM PROPERTIES
@@ -2225,8 +2227,14 @@ a { text-decoration: none; color: inherit; }
 
       <!-- Name field (sign up only) -->
       <div class="auth-field" id="auth-name-field" style="display:none">
-        <label class="auth-label" for="auth-name">Your name</label>
+        <label class="auth-label" for="auth-name">Full name</label>
         <input class="auth-input" type="text" id="auth-name" placeholder="Arjun Sharma" autocomplete="name" onkeydown="Auth.handleKey(event)">
+      </div>
+
+      <!-- Date of Birth field (sign up only) -->
+      <div class="auth-field" id="auth-dob-field" style="display:none">
+        <label class="auth-label" for="auth-dob">Date of birth</label>
+        <input class="auth-input" type="date" id="auth-dob" autocomplete="bday" onkeydown="Auth.handleKey(event)">
       </div>
 
       <!-- Password field -->
@@ -8834,9 +8842,10 @@ const Onboarding = {
     };
 
     // Load existing leagues, add new one, persist
-    const existing = JSON.parse(sessionStorage.getItem('bb_myLeagues') || '[]');
+    const userId = DB.currentUser.id || 'guest';
+    const existing = JSON.parse(localStorage.getItem('bb_myLeagues_' + userId) || '[]');
     existing.push(newEntry);
-    sessionStorage.setItem('bb_myLeagues', JSON.stringify(existing));
+    localStorage.setItem('bb_myLeagues_' + userId, JSON.stringify(existing));
 
     // Update State
     State.myLeagues = existing;
@@ -8845,8 +8854,7 @@ const Onboarding = {
     // Set routing flags based on newest league
     State.newLeague    = !isJoin;
     State.joinedLeague = isJoin;
-    sessionStorage.setItem('bb_hasLeague', 'true');
-    sessionStorage.setItem('bb_activeLeagueIndex', String(existing.length - 1));
+    localStorage.setItem('bb_activeLeagueIndex_' + userId, String(existing.length - 1));
 
     App.buildSidebarLeague();
     App.render();
@@ -8856,10 +8864,17 @@ const Onboarding = {
   }
 };
 
+// ============================================================
+// SUPABASE CLIENT
+// ============================================================
+const SUPABASE_URL  = 'https://slxoindracudgyyhvwfq.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNseG9pbmRyYWN1ZGd5eWh2d2ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzMzY3ODIsImV4cCI6MjA4NzkxMjc4Mn0.auUhL5I4qfhyDXlnGI-T6QRxGKZ-y21kJPw0cAaWFYo';
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
 const Auth = {
   mode: 'login', // 'login' | 'signup'
 
-  init() {
+  async init() {
     // Spawn floating cricket emojis
     const emojis = ['🏏','🏐','🧤','🏆','⚡','🎯','🌟','🏅'];
     const floaters = document.getElementById('auth-floaters');
@@ -8876,41 +8891,62 @@ const Auth = {
       }
     }
 
-    // Check if user is already "logged in" (session flag)
-    if (sessionStorage.getItem('bb_authed')) {
-      State.hasLeague = sessionStorage.getItem('bb_hasLeague') === 'true';
-      State.myLeagues = JSON.parse(sessionStorage.getItem('bb_myLeagues') || '[]');
-      State.activeLeagueIndex = parseInt(sessionStorage.getItem('bb_activeLeagueIndex') || '0', 10);
-      // Set routing flags from the active league
-      const active = State.myLeagues[State.activeLeagueIndex];
-      State.newLeague    = active ? active.type === 'created' : false;
-      State.joinedLeague = active ? active.type === 'joined'  : false;
-      this.enterApp();
+    // Check for an existing Supabase session (persists across page refreshes)
+    const { data: { session } } = await _supabase.auth.getSession();
+    if (session) {
+      this._loadUserIntoState(session.user);
+      this.enterApp(false);
+      return;
     }
+
+    // Listen for auth state changes (login, logout, token refresh)
+    _supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        this._loadUserIntoState(session.user);
+      }
+      if (event === 'SIGNED_OUT') {
+        State.currentUser = {};
+      }
+    });
+  },
+
+  // Pull user metadata from Supabase session into the app's State/DB
+  _loadUserIntoState(user) {
+    const meta = user.user_metadata || {};
+    const fullName = meta.full_name || meta.name || user.email.split('@')[0];
+    DB.currentUser.name  = fullName;
+    DB.currentUser.email = user.email;
+    DB.currentUser.id    = user.id;
+    DB.managers[0].name  = fullName;
+
+    // Restore league state from localStorage (survives refresh, unlike sessionStorage)
+    const stored = localStorage.getItem('bb_myLeagues_' + user.id);
+    State.myLeagues = stored ? JSON.parse(stored) : [];
+    State.hasLeague = State.myLeagues.length > 0;
+    State.activeLeagueIndex = parseInt(localStorage.getItem('bb_activeLeagueIndex_' + user.id) || '0', 10);
+    const active = State.myLeagues[State.activeLeagueIndex];
+    State.newLeague    = active ? active.type === 'created' : false;
+    State.joinedLeague = active ? active.type === 'joined'  : false;
   },
 
   setMode(mode) {
     this.mode = mode;
     const isSignup = mode === 'signup';
 
-    // Toggle tab active state
     document.getElementById('auth-login-tab').classList.toggle('active', !isSignup);
     document.getElementById('auth-signup-tab').classList.toggle('active', isSignup);
 
-    // Update copy
     document.getElementById('auth-title').textContent = isSignup ? 'Create your account' : 'Welcome back';
     document.getElementById('auth-sub').textContent   = isSignup ? 'Join the Boundary Boys fantasy league' : 'Log in to your Boundary Boys account';
     document.getElementById('auth-submit-btn').textContent = isSignup ? 'Create Account' : 'Log In';
 
-    // Show/hide fields
-    document.getElementById('auth-name-field').style.display  = isSignup ? '' : 'none';
-    document.getElementById('auth-forgot').style.display      = isSignup ? 'none' : '';
-    document.getElementById('auth-terms').style.display       = isSignup ? '' : 'none';
+    document.getElementById('auth-name-field').style.display = isSignup ? '' : 'none';
+    document.getElementById('auth-dob-field').style.display  = isSignup ? '' : 'none';
+    document.getElementById('auth-forgot').style.display     = isSignup ? 'none' : '';
+    document.getElementById('auth-terms').style.display      = isSignup ? '' : 'none';
 
-    // Clear errors
     this.clearError();
 
-    // Update autocomplete hint on password
     const pwInput = document.getElementById('auth-password');
     if (pwInput) pwInput.setAttribute('autocomplete', isSignup ? 'new-password' : 'current-password');
   },
@@ -8947,9 +8983,10 @@ const Auth = {
   },
 
   validate() {
-    const email = document.getElementById('auth-email')?.value.trim();
+    const email    = document.getElementById('auth-email')?.value.trim();
     const password = document.getElementById('auth-password')?.value;
-    const name = document.getElementById('auth-name')?.value.trim();
+    const name     = document.getElementById('auth-name')?.value.trim();
+    const dob      = document.getElementById('auth-dob')?.value;
 
     if (!email || !email.includes('@')) {
       this.showError('Please enter a valid email address.', 'auth-email'); return false;
@@ -8957,83 +8994,144 @@ const Auth = {
     if (!password || password.length < 6) {
       this.showError('Password must be at least 6 characters.', 'auth-password'); return false;
     }
-    if (this.mode === 'signup' && !name) {
-      this.showError('Please enter your name.', 'auth-name'); return false;
+    if (this.mode === 'signup') {
+      if (!name) {
+        this.showError('Please enter your full name.', 'auth-name'); return false;
+      }
+      if (!dob) {
+        this.showError('Please enter your date of birth.', 'auth-dob'); return false;
+      }
+      // Must be at least 13 years old
+      const birthDate = new Date(dob);
+      const age = Math.floor((Date.now() - birthDate) / (365.25 * 24 * 60 * 60 * 1000));
+      if (age < 13) {
+        this.showError('You must be at least 13 years old to sign up.', 'auth-dob'); return false;
+      }
     }
     return true;
   },
 
-  submit() {
+  async submit() {
     this.clearError();
     if (!this.validate()) return;
-
     this.setLoading(true);
 
-    // Simulate network request
-    setTimeout(() => {
-      this.setLoading(false);
-      const email = document.getElementById('auth-email')?.value.trim();
+    const email    = document.getElementById('auth-email')?.value.trim();
+    const password = document.getElementById('auth-password')?.value;
 
-      // Mock: wrong password for demo
-      if (this.mode === 'login') {
-        const pw = document.getElementById('auth-password')?.value;
-        if (pw === 'wrong') {
-          this.showError('Incorrect password. Please try again.', 'auth-password');
-          return;
-        }
-      }
-
+    try {
       if (this.mode === 'signup') {
         const name = document.getElementById('auth-name')?.value.trim();
-        DB.currentUser.name = name;
-        DB.managers[0].name = name;
+        const dob  = document.getElementById('auth-dob')?.value;
+
+        const { data, error } = await _supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+              date_of_birth: dob,
+            }
+          }
+        });
+
+        if (error) throw error;
+
+        // Supabase sends a confirmation email by default.
+        // If the user is returned without a session, confirmation is pending.
+        if (data.user && !data.session) {
+          this.setLoading(false);
+          this.showError('✅ Account created! Check your email to confirm before logging in.', null);
+          return;
+        }
+
+        // Auto-confirmed (e.g. if email confirmation is disabled in Supabase)
         State.isNewUser = true;
         State.hasLeague = false;
         State.myLeagues = [];
-        sessionStorage.removeItem('bb_hasLeague');
-        sessionStorage.removeItem('bb_myLeagues');
-        sessionStorage.removeItem('bb_activeLeagueIndex');
+        this.setLoading(false);
+        this.enterApp(true);
+
+      } else {
+        // LOGIN
+        const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        this.setLoading(false);
+        this.enterApp(false);
       }
 
-      sessionStorage.setItem('bb_authed', '1');
-      this.enterApp();
-    }, 1200);
+    } catch (err) {
+      this.setLoading(false);
+      // Translate Supabase error messages into friendly copy
+      const msg = err.message || 'Something went wrong. Please try again.';
+      if (msg.includes('Invalid login credentials')) {
+        this.showError('Incorrect email or password. Please try again.', 'auth-password');
+      } else if (msg.includes('Email not confirmed')) {
+        this.showError('Please confirm your email before logging in. Check your inbox.', null);
+      } else if (msg.includes('User already registered')) {
+        this.showError('An account with this email already exists. Try logging in instead.', 'auth-email');
+      } else {
+        this.showError(msg, null);
+      }
+    }
   },
 
-  socialLogin(provider, btn) {
+  // Social login — wired up but requires OAuth setup in Supabase dashboard
+  async socialLogin(provider, btn) {
     const names = { google: 'Google', apple: 'Apple' };
     const orig = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="auth-spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:var(--text-1)"></span> Connecting…';
 
-    setTimeout(() => {
+    const { error } = await _supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin }
+    });
+
+    if (error) {
       btn.disabled = false;
       btn.innerHTML = orig;
-      sessionStorage.setItem('bb_authed', '1');
-      State.isNewUser = true;
-      State.hasLeague = false;
-      App.toast(`✅ Signed in with ${names[provider]}!`);
-      this.enterApp();
-    }, 1400);
+      this.showError(`Could not connect with ${names[provider]}. Please try email login.`, null);
+    }
+    // On success Supabase redirects the page — no further action needed here
   },
 
-  forgotPassword() {
+  async forgotPassword() {
     const email = document.getElementById('auth-email')?.value.trim();
     if (!email || !email.includes('@')) {
       this.showError('Enter your email address first, then click Forgot Password.', 'auth-email');
       return;
     }
-    App.toast(`📧 Password reset link sent to ${email}`);
+    const { error } = await _supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin
+    });
+    if (error) {
+      this.showError('Could not send reset email. Please try again.', null);
+    } else {
+      App.toast(`📧 Password reset link sent to ${email}`);
+    }
   },
 
-  enterApp() {
-    // Hide auth, show app
+  async signOut() {
+    await _supabase.auth.signOut();
+    // Clear local state
+    State.hasLeague = false;
+    State.myLeagues = [];
+    State.isNewUser = false;
+    // Show auth screen again
+    const authEl = document.getElementById('auth-screen');
+    const appEl  = document.getElementById('app-shell');
+    if (appEl)  { appEl.style.opacity = '0'; setTimeout(() => { appEl.style.display = 'none'; }, 400); }
+    if (authEl) { authEl.style.display = 'flex'; setTimeout(() => { authEl.classList.add('visible'); }, 10); }
+  },
+
+  enterApp(isNewUser) {
+    State.isNewUser = isNewUser;
     const authEl = document.getElementById('auth-screen');
     const appEl  = document.getElementById('app-shell');
     if (authEl) { authEl.style.opacity = '0'; authEl.style.transition = 'opacity 0.4s ease'; setTimeout(() => { authEl.style.display = 'none'; }, 400); }
     if (appEl)  { appEl.style.display = 'flex'; setTimeout(() => { appEl.style.opacity = '1'; }, 10); }
     App.init();
-    // Show onboarding for brand-new users after app has rendered
     if (State.isNewUser) {
       setTimeout(() => Onboarding.show(), 600);
     }
