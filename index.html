@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0047)file:///C:/Users/Akshay/Downloads/index_16.html -->
+<!-- saved from url=(0047)file:///C:/Users/Akshay/Downloads/index_17.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <!--
 =============================================================================
@@ -2201,7 +2201,7 @@ a { text-decoration: none; color: inherit; }
     <div class="auth-bg-glow auth-bg-glow-1"></div>
     <div class="auth-bg-glow auth-bg-glow-2"></div>
     <div class="auth-bg-pitch"></div>
-    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 64.997%; animation-duration: 16.389s; animation-delay: -5.86315s; font-size: 36.3463px;">🏏</div><div class="auth-floater" style="left: 15.6418%; animation-duration: 20.7696s; animation-delay: -5.00582s; font-size: 33.3524px;">🏐</div><div class="auth-floater" style="left: 15.4303%; animation-duration: 13.4148s; animation-delay: -17.9864s; font-size: 28.5325px;">🧤</div><div class="auth-floater" style="left: 81.8663%; animation-duration: 13.0609s; animation-delay: -10.5917s; font-size: 28.2126px;">🏆</div><div class="auth-floater" style="left: 75.8133%; animation-duration: 16.564s; animation-delay: -4.04179s; font-size: 23.0936px;">⚡</div><div class="auth-floater" style="left: 49.2279%; animation-duration: 16.5248s; animation-delay: -4.20459s; font-size: 38.1437px;">🎯</div><div class="auth-floater" style="left: 87.2281%; animation-duration: 15.4568s; animation-delay: -16.8612s; font-size: 37.9345px;">🌟</div><div class="auth-floater" style="left: 95.3004%; animation-duration: 26.9422s; animation-delay: -3.59512s; font-size: 27.6027px;">🏅</div><div class="auth-floater" style="left: 58.1213%; animation-duration: 16.5383s; animation-delay: -13.7116s; font-size: 33.6418px;">🏏</div><div class="auth-floater" style="left: 8.03497%; animation-duration: 18.9625s; animation-delay: -14.7837s; font-size: 21.2125px;">🏐</div><div class="auth-floater" style="left: 99.4715%; animation-duration: 24.9671s; animation-delay: -14.6888s; font-size: 21.4998px;">🧤</div><div class="auth-floater" style="left: 16.8975%; animation-duration: 22.6079s; animation-delay: -12.9142s; font-size: 36.3569px;">🏆</div><div class="auth-floater" style="left: 27.3767%; animation-duration: 26.538s; animation-delay: -9.87621s; font-size: 22.4147px;">⚡</div><div class="auth-floater" style="left: 62.539%; animation-duration: 16.8881s; animation-delay: -7.03891s; font-size: 28.5068px;">🎯</div></div>
+    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 29.3287%; animation-duration: 13.715s; animation-delay: -0.650908s; font-size: 38.9139px;">🏏</div><div class="auth-floater" style="left: 42.9%; animation-duration: 22.8171s; animation-delay: -19.6027s; font-size: 36.0004px;">🏐</div><div class="auth-floater" style="left: 73.0612%; animation-duration: 17.6926s; animation-delay: -0.399303s; font-size: 39.3337px;">🧤</div><div class="auth-floater" style="left: 62.7801%; animation-duration: 12.1707s; animation-delay: -15.3756s; font-size: 24.6012px;">🏆</div><div class="auth-floater" style="left: 75.91%; animation-duration: 15.2335s; animation-delay: -3.37513s; font-size: 24.7148px;">⚡</div><div class="auth-floater" style="left: 43.6197%; animation-duration: 16.6949s; animation-delay: -8.28878s; font-size: 29.2153px;">🎯</div><div class="auth-floater" style="left: 24.3813%; animation-duration: 12.4373s; animation-delay: -3.44706s; font-size: 38.3465px;">🌟</div><div class="auth-floater" style="left: 78.2973%; animation-duration: 26.4004s; animation-delay: -4.89586s; font-size: 23.8227px;">🏅</div><div class="auth-floater" style="left: 3.80953%; animation-duration: 16.3853s; animation-delay: -2.753s; font-size: 27.759px;">🏏</div><div class="auth-floater" style="left: 24.6541%; animation-duration: 25.0644s; animation-delay: -19.5052s; font-size: 22.179px;">🏐</div><div class="auth-floater" style="left: 8.20746%; animation-duration: 24.9171s; animation-delay: -12.4639s; font-size: 22.2701px;">🧤</div><div class="auth-floater" style="left: 90.9666%; animation-duration: 21.1923s; animation-delay: -2.13912s; font-size: 31.6674px;">🏆</div><div class="auth-floater" style="left: 94.275%; animation-duration: 15.8661s; animation-delay: -13.4578s; font-size: 21.2547px;">⚡</div><div class="auth-floater" style="left: 2.18465%; animation-duration: 21.3516s; animation-delay: -10.4054s; font-size: 37.674px;">🎯</div></div>
   </div>
 
   <div class="auth-layout">
@@ -5087,106 +5087,77 @@ const Modals = {
     var isBatter = (p.role === 'BAT' || p.role === 'WK');
     var isBowler = (p.role === 'BOW');
     var isAR     = (p.role === 'AR');
-    var maxForm = Math.max.apply(null, p.form);
 
-    // Role accent colour for avatar border
-    var roleAccent = p.role === 'BAT' ? 'var(--green)'
-      : p.role === 'WK' ? 'var(--purple)'
-      : p.role === 'AR' ? 'var(--gold)'
-      : 'var(--blue)';
+    // Initials avatar
+    var initials  = p.name ? p.name.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase() : '?';
+    var roleAccent = p.role==='BAT' ? 'var(--green)' : p.role==='WK' ? 'var(--purple)' : p.role==='AR' ? 'var(--gold)' : 'var(--blue)';
+    var roleColor  = ROLE_COLORS[p.role] || 'pill-blue';
+    var roleLabel  = (ROLES[p.role] && ROLES[p.role].label) || p.role;
+    var roleIcon   = (ROLES[p.role] && ROLES[p.role].icon)  || '';
 
-    // Stat table rows helper
-    function srow(label, tv, cv) {
+    function fmt(v, dec) { return (v != null && v > 0) ? (dec ? parseFloat(v).toFixed(dec) : v) : '-'; }
+
+    function srow(label, val) {
       return '<tr>'
-        + '<td style="padding:8px 12px;font-size:12px;color:var(--text-2);border-bottom:1px solid var(--border)">' + label + '</td>'
-        + '<td style="padding:8px 12px;font-size:13px;font-weight:700;text-align:right;border-bottom:1px solid var(--border);color:var(--text-1)">' + (tv != null ? tv : '-') + '</td>'
-        + '<td style="padding:8px 12px;font-size:13px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-2)">' + (cv != null ? cv : '-') + '</td>'
+        + '<td style="padding:7px 12px;font-size:12px;color:var(--text-2);border-bottom:1px solid var(--border)">' + label + '</td>'
+        + '<td style="padding:7px 12px;font-size:13px;font-weight:700;text-align:right;border-bottom:1px solid var(--border);color:var(--text-1)">' + val + '</td>'
         + '</tr>';
     }
 
-    var statRows = srow('Matches', t.matches, c.matches);
-    if (isBatter || isAR) {
-      statRows += srow('Runs', t.runs, c.runs);
-      statRows += srow('Average', t.avg != null ? t.avg.toFixed(1) : null, c.avg != null ? c.avg.toFixed(1) : null);
-      statRows += srow('Strike Rate', t.sr != null ? t.sr.toFixed(1) : null, c.sr != null ? c.sr.toFixed(1) : null);
-      statRows += srow('50s / 100s', (t.fifties || 0) + ' / ' + (t.hundreds || 0), (c.fifties || 0) + ' / ' + (c.hundreds || 0));
-    }
-    if (isBowler || isAR) {
-      statRows += srow('Wickets', t.wickets, c.wickets);
-      statRows += srow('Economy', t.economy != null ? t.economy.toFixed(1) : null, c.economy != null ? c.economy.toFixed(1) : null);
-    }
-    statRows += srow('Catches', t.catches, c.catches);
-    if (p.role === 'WK') {
-      statRows += srow('Stumpings', t.stumpings || 0, c.stumpings || 0);
+    function statSection(title, s, accentColor) {
+      if (!s) return '';
+      var rows = srow('Matches', fmt(s.matches));
+      if (isBatter || isAR) {
+        rows += srow('Runs',         fmt(s.runs));
+        rows += srow('Batting Avg',  fmt(s.avg, 1));
+        rows += srow('Strike Rate',  fmt(s.sr, 1));
+      }
+      if (isBowler || isAR) {
+        rows += srow('Wickets',      fmt(s.wickets));
+        rows += srow('Bowling Avg',  fmt(s.bowling_avg, 1));
+        rows += srow('Economy Rate', fmt(s.economy, 1));
+      }
+      rows += srow('Catches',   fmt(s.catches));
+      rows += srow('Run Outs',  fmt(s.runOuts));
+      if (p.role === 'WK') rows += srow('Stumpings', fmt(s.stumpings));
+      return '<div style="flex:1;min-width:0;border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--border)">'
+        + '<div style="padding:9px 12px;background:var(--bg-2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:' + accentColor + '">' + title + '</div>'
+        + '<table style="width:100%;border-collapse:collapse"><tbody>' + rows + '</tbody></table>'
+        + '</div>';
     }
 
-    // Sparkline bars
-    var bars = p.form.map(function(v) {
-      var h = Math.round((v / maxForm) * 100);
-      return '<div style="flex:1;background:var(--green);border-radius:3px 3px 0 0;height:' + h + '%;min-height:4px"></div>';
-    }).join('');
-    var labels = p.form.map(function(v) {
-      return '<div style="flex:1;text-align:center;font-size:10px;color:var(--text-3);margin-top:3px">' + v + '</div>';
-    }).join('');
-
+    var creditVal  = p.creditValue ? parseFloat(p.creditValue).toFixed(1) : '8.0';
     var statusPill = p.drafted
-      ? '<span class="pill pill-gold">Owned &mdash; ' + (owner ? owner.name : '?') + '</span>'
-      : '<span class="pill pill-green">&#10003; Free Agent</span>';
-
-    var ptsBlock = draftDone
-      ? '<div class="stat-block"><div class="sv">' + p.pts + '</div><div class="sl">Tournament Pts</div></div>'
-      : '<div class="stat-block"><div class="sv" style="color:var(--blue)">' + (p.projectedPts || p.pts) + '</div><div class="sl">Projected Pts</div></div>';
-
-    var onWatchlist = State.watchlist.includes(p.id);
+      ? '<span class="pill pill-gold">Rostered</span>'
+      : '<span class="pill pill-green">&#10003; Available</span>';
+    var onWatchlist = State.watchlist && State.watchlist.includes(p.id);
     var watchBtn = !p.drafted
-      ? '<button class="btn btn-secondary" id="watchlist-btn-' + p.id + '" onclick="MyTeam.toggleWatchlist(' + p.id + ')">'
-        + (onWatchlist ? '★ On Watchlist' : '☆ Add to Watchlist')
-        + '</button>'
-      : (p.owner === 1
-          ? '<button class="btn btn-secondary" onclick="App.closeModal();App.go(\'myteam\')">🏏 View My Team</button>'
-          : '<button class="btn btn-secondary" onclick="App.closeModal();Home.viewTeam(' + p.owner + ')">👤 View ' + (owner ? owner.name : '') + '\'s Team</button>');
+      ? '<button class="btn btn-secondary" id="watchlist-btn-' + p.id + '" onclick="MyTeam.toggleWatchlist(\'' + p.id + '\')">'
+          + (onWatchlist ? '★ On Watchlist' : '☆ Add to Watchlist') + '</button>'
+      : '<button class="btn btn-secondary" onclick="App.closeModal()">Close</button>';
 
-    var html = '<div class="modal" style="max-width:520px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">'
+    var html = '<div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">'
       + '<button class="modal-close" onclick="App.closeModal()">&#10005;</button>'
-      // Header
       + '<div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">'
-      +   '<div style="width:64px;height:64px;border-radius:50%;background:var(--bg-2);border:2px solid '
-      +     roleAccent + ';display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">'
-      +     p.country
-      +   '</div>'
+      +   '<div style="width:64px;height:64px;border-radius:50%;background:var(--bg-2);border:2px solid ' + roleAccent + ';display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:' + roleAccent + ';flex-shrink:0">' + initials + '</div>'
       +   '<div style="flex:1;min-width:0">'
       +     '<div style="font-family:var(--font-display);font-size:18px;font-weight:800;margin-bottom:6px">' + p.name + '</div>'
       +     '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-      +       '<span class="pill ' + ROLE_COLORS[p.role] + '">' + ROLES[p.role].icon + ' ' + ROLES[p.role].label + '</span>'
+      +       '<span class="pill ' + roleColor + '">' + roleIcon + ' ' + roleLabel + '</span>'
       +       '<span class="pill pill-blue">' + p.team + '</span>'
+      +       (p.teamFull && p.teamFull !== p.team ? '<span style="font-size:12px;color:var(--text-3)">' + p.teamFull + '</span>' : '')
       +       statusPill
       +     '</div>'
       +   '</div>'
+      +   '<div style="text-align:right;flex-shrink:0">'
+      +     '<div style="font-family:var(--font-display);font-size:22px;font-weight:800;color:var(--gold)">' + creditVal + '</div>'
+      +     '<div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px">Credits</div>'
+      +   '</div>'
       + '</div>'
-      // Top stat strip — 3 blocks
-      + '<div class="player-detail-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">'
-      +   ptsBlock
-      +   '<div class="stat-block"><div class="sv">' + Math.max.apply(null, p.form) + '</div><div class="sl">Best GW Score</div></div>'
-      +   '<div class="stat-block"><div class="sv">' + t.matches + '</div><div class="sl">Matches</div></div>'
+      + '<div style="display:flex;gap:12px;margin-bottom:16px">'
+      +   statSection('IPL Stats', t, 'var(--green)')
+      +   statSection('T20 Career', c, 'var(--blue)')
       + '</div>'
-      // Sparkline
-      + '<div style="margin-bottom:20px">'
-      +   '<div class="section-label" style="margin-bottom:8px">Form &mdash; Last 5 Gameweeks</div>'
-      +   '<div style="display:flex;align-items:flex-end;gap:4px;height:44px">' + bars + '</div>'
-      +   '<div style="display:flex">' + labels + '</div>'
-      + '</div>'
-      // Stats table
-      + '<div style="margin-bottom:20px;border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--border)">'
-      +   '<table style="width:100%;border-collapse:collapse">'
-      +   '<thead><tr>'
-      +     '<th style="padding:9px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-3);background:var(--bg-2);border-bottom:1px solid var(--border);text-align:left">Stat</th>'
-      +     '<th style="padding:9px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);background:var(--bg-2);border-bottom:1px solid var(--border);text-align:right">This IPL</th>'
-      +     '<th style="padding:9px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-3);background:var(--bg-2);border-bottom:1px solid var(--border);text-align:right">IPL Career</th>'
-      +   '</tr></thead>'
-      +   '<tbody>' + statRows + '</tbody>'
-      +   '</table>'
-      + '</div>'
-      // Actions
       + '<div style="display:flex;gap:10px">'
       +   watchBtn
       +   '<button class="btn btn-secondary" onclick="App.closeModal()" style="flex:1;justify-content:center">Close</button>'
@@ -7021,25 +6992,26 @@ const Players = {
         ? (t.economy != null ? t.economy.toFixed(1) : '-')
         : (t.sr      != null ? t.sr.toFixed(1)      : '-');
       var statusHTML = p.drafted
-        ? '<span class="pill pill-gold" style="font-size:10px">' + (owner ? owner.name : '?') + '</span>'
-        : '<span class="pill pill-green" style="font-size:10px">Free</span>';
+        ? '<span class="pill pill-gold" style="font-size:10px">Rostered</span>'
+        : '<span class="pill pill-green" style="font-size:10px">Available</span>';
 
       tbody += '<tr class="' + (isMe ? 'pt-mine' : '') + '" onclick="Players._openModal(' + p.id + ')">';
       tbody += '<td style="text-align:center;font-size:12px;color:var(--text-3);font-weight:600;padding:9px 8px">' + (i + 1) + '</td>';
-      tbody += '<td><div style="display:flex;align-items:center;gap:8px">'
-             +   '<span style="font-size:17px;line-height:1">' + p.country + '</span>'
-             +   '<div>'
-             +     '<div style="font-size:13px;font-weight:700">' + p.name + '</div>'
-             +     '<div style="font-size:11px;color:var(--text-3)">' + p.team + ' &middot; ' + ROLES[p.role].label + '</div>'
-             +   '</div>'
+      var initials = p.name ? p.name.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase() : '?';
+      var roleColor = ROLE_COLORS[p.role] || 'pill-blue';
+      var roleIcon  = (ROLES[p.role] && ROLES[p.role].icon) || '';
+      var roleLabel = (ROLES[p.role] && ROLES[p.role].label) || p.role;
+      tbody += '<td><div style="display:flex;align-items:center;gap:10px">'
+             +   '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text-2);flex-shrink:0">' + initials + '</div>'
+             +   '<div style="font-size:13px;font-weight:700">' + p.name + '</div>'
              + '</div></td>';
       tbody += '<td><span class="pill pill-blue" style="font-size:10px">' + p.team + '</span></td>';
-      tbody += '<td><span class="pill ' + ROLE_COLORS[p.role] + '" style="font-size:10px">' + ROLES[p.role].icon + ' ' + p.role + '</span></td>';
+      tbody += '<td><span class="pill ' + roleColor + '" style="font-size:10px">' + roleIcon + ' ' + p.role + '</span></td>';
       tbody += '<td style="text-align:right;font-family:var(--font-display);font-size:15px;font-weight:800;color:' + ptsColor + '">' + ptsVal + '</td>';
-      tbody += '<td style="text-align:center;color:var(--text-2);font-size:13px">' + t.matches + '</td>';
-      tbody += '<td style="text-align:right;font-size:13px;font-weight:600">' + (t.runs || '-') + '</td>';
-      tbody += '<td style="text-align:right;font-size:13px;font-weight:600">' + (t.wickets || '-') + '</td>';
-      tbody += '<td style="text-align:right;font-size:13px;color:var(--text-2)">' + (t.avg != null ? t.avg.toFixed(1) : '-') + '</td>';
+      tbody += '<td style="text-align:center;color:var(--text-2);font-size:13px">' + (t.matches || '-') + '</td>';
+      tbody += '<td style="text-align:right;font-size:13px;font-weight:600">' + (t.runs != null && t.runs > 0 ? t.runs : '-') + '</td>';
+      tbody += '<td style="text-align:right;font-size:13px;font-weight:600">' + (t.wickets != null && t.wickets > 0 ? t.wickets : '-') + '</td>';
+      tbody += '<td style="text-align:right;font-size:13px;color:var(--text-2)">' + (t.avg != null && t.avg > 0 ? t.avg.toFixed(1) : '-') + '</td>';
       tbody += '<td style="text-align:right;font-size:13px;color:var(--text-2)">' + srEco + '</td>';
       tbody += '<td>' + statusHTML + '</td>';
       tbody += '</tr>';
