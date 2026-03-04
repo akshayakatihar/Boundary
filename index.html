@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0046)file:///C:/Users/Akshay/Downloads/index_1.html -->
+<!-- saved from url=(0046)file:///C:/Users/Akshay/Downloads/index_3.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <!--
 =============================================================================
@@ -2174,7 +2174,7 @@ a { text-decoration: none; color: inherit; }
     <div class="auth-bg-glow auth-bg-glow-1"></div>
     <div class="auth-bg-glow auth-bg-glow-2"></div>
     <div class="auth-bg-pitch"></div>
-    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 88.4713%; animation-duration: 25.431s; animation-delay: -0.798639s; font-size: 26.6454px;">🏏</div><div class="auth-floater" style="left: 8.18391%; animation-duration: 12.1747s; animation-delay: -1.29019s; font-size: 27.2427px;">🏐</div><div class="auth-floater" style="left: 11.2311%; animation-duration: 12.7454s; animation-delay: -13.6362s; font-size: 36.351px;">🧤</div><div class="auth-floater" style="left: 12.8978%; animation-duration: 25.8681s; animation-delay: -17.3543s; font-size: 28.1093px;">🏆</div><div class="auth-floater" style="left: 26.0654%; animation-duration: 24.2975s; animation-delay: -5.93043s; font-size: 30.6315px;">⚡</div><div class="auth-floater" style="left: 23.9864%; animation-duration: 27.6148s; animation-delay: -12.5514s; font-size: 27.5447px;">🎯</div><div class="auth-floater" style="left: 59.2195%; animation-duration: 13.1798s; animation-delay: -4.38462s; font-size: 39.7095px;">🌟</div><div class="auth-floater" style="left: 6.3059%; animation-duration: 15.4781s; animation-delay: -1.49419s; font-size: 21.4765px;">🏅</div><div class="auth-floater" style="left: 39.3084%; animation-duration: 24.1053s; animation-delay: -18.4065s; font-size: 21.4863px;">🏏</div><div class="auth-floater" style="left: 40.4092%; animation-duration: 25.2981s; animation-delay: -9.67913s; font-size: 28.6533px;">🏐</div><div class="auth-floater" style="left: 48.5103%; animation-duration: 27.5745s; animation-delay: -0.811385s; font-size: 29.9514px;">🧤</div><div class="auth-floater" style="left: 2.4097%; animation-duration: 27.7772s; animation-delay: -18.4264s; font-size: 32.5923px;">🏆</div><div class="auth-floater" style="left: 81.3582%; animation-duration: 25.2506s; animation-delay: -9.31724s; font-size: 25.8153px;">⚡</div><div class="auth-floater" style="left: 69.8701%; animation-duration: 25.6782s; animation-delay: -6.75884s; font-size: 36.969px;">🎯</div></div>
+    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 40.9631%; animation-duration: 21.3781s; animation-delay: -6.50039s; font-size: 26.1428px;">🏏</div><div class="auth-floater" style="left: 51.5727%; animation-duration: 15.8724s; animation-delay: -15.2415s; font-size: 27.7789px;">🏐</div><div class="auth-floater" style="left: 25.5481%; animation-duration: 12.6862s; animation-delay: -10.2977s; font-size: 37.3045px;">🧤</div><div class="auth-floater" style="left: 34.9848%; animation-duration: 18.6489s; animation-delay: -2.23763s; font-size: 34.1726px;">🏆</div><div class="auth-floater" style="left: 36.9021%; animation-duration: 15.2875s; animation-delay: -12.2852s; font-size: 36.6117px;">⚡</div><div class="auth-floater" style="left: 80.8226%; animation-duration: 17.2097s; animation-delay: -14.9649s; font-size: 25.7975px;">🎯</div><div class="auth-floater" style="left: 77.1934%; animation-duration: 17.8407s; animation-delay: -10.5599s; font-size: 33.4296px;">🌟</div><div class="auth-floater" style="left: 11.295%; animation-duration: 17.8509s; animation-delay: -16.4504s; font-size: 39.6905px;">🏅</div><div class="auth-floater" style="left: 36.877%; animation-duration: 17.3668s; animation-delay: -9.91697s; font-size: 33.4167px;">🏏</div><div class="auth-floater" style="left: 91.1642%; animation-duration: 24.8491s; animation-delay: -19.6012s; font-size: 38.4124px;">🏐</div><div class="auth-floater" style="left: 16.755%; animation-duration: 12.9722s; animation-delay: -5.87636s; font-size: 21.8804px;">🧤</div><div class="auth-floater" style="left: 58.5083%; animation-duration: 21.3145s; animation-delay: -2.94682s; font-size: 32.7807px;">🏆</div><div class="auth-floater" style="left: 9.87688%; animation-duration: 13.672s; animation-delay: -19.9972s; font-size: 26.5128px;">⚡</div><div class="auth-floater" style="left: 56.5919%; animation-duration: 24.5358s; animation-delay: -3.42783s; font-size: 36.8023px;">🎯</div></div>
   </div>
 
   <div class="auth-layout">
@@ -8992,7 +8992,7 @@ const Auth = {
     const { data: { session } } = await _supabase.auth.getSession();
     if (session) {
       await this._loadUserIntoState(session.user);
-      this.enterApp(false);
+      await this.enterApp(false);
       return;
     }
 
@@ -9158,7 +9158,7 @@ const Auth = {
         State.hasLeague = false;
         State.myLeagues = [];
         this.setLoading(false);
-        this.enterApp(true);
+        await this.enterApp(true);
 
       } else {
         // LOGIN
@@ -9168,7 +9168,7 @@ const Auth = {
         // if the row is already there; ensures OAuth users get one on first email login too).
         await Profiles.upsert(data.user);
         this.setLoading(false);
-        this.enterApp(false);
+        await this.enterApp(false);
       }
 
     } catch (err) {
@@ -9236,12 +9236,15 @@ const Auth = {
     if (authEl) { authEl.style.display = 'flex'; setTimeout(() => { authEl.classList.add('visible'); }, 10); }
   },
 
-  enterApp(isNewUser) {
+  async enterApp(isNewUser) {
     State.isNewUser = isNewUser;
     const authEl = document.getElementById('auth-screen');
     const appEl  = document.getElementById('app-shell');
     if (authEl) { authEl.style.opacity = '0'; authEl.style.transition = 'opacity 0.4s ease'; setTimeout(() => { authEl.style.display = 'none'; }, 400); }
     if (appEl)  { appEl.style.display = 'flex'; setTimeout(() => { appEl.style.opacity = '1'; }, 10); }
+    // Wait for _loadUserIntoState (which fetches the profile) to finish
+    // before booting the app, so DB.currentUser is fully populated.
+    await this._loadUserIntoState(await _supabase.auth.getUser().then(r => r.data.user));
     App.init();
     if (State.isNewUser) {
       setTimeout(() => Onboarding.show(), 600);
