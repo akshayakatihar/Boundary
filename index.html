@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0047)file:///C:/Users/Akshay/Downloads/index_15.html -->
+<!-- saved from url=(0047)file:///C:/Users/Akshay/Downloads/index_16.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <!--
 =============================================================================
@@ -2201,7 +2201,7 @@ a { text-decoration: none; color: inherit; }
     <div class="auth-bg-glow auth-bg-glow-1"></div>
     <div class="auth-bg-glow auth-bg-glow-2"></div>
     <div class="auth-bg-pitch"></div>
-    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 15.7037%; animation-duration: 27.9062s; animation-delay: -17.6025s; font-size: 39.3808px;">🏏</div><div class="auth-floater" style="left: 96.2441%; animation-duration: 16.7424s; animation-delay: -10.7746s; font-size: 37.2623px;">🏐</div><div class="auth-floater" style="left: 95.9499%; animation-duration: 21.6451s; animation-delay: -13.7437s; font-size: 25.7541px;">🧤</div><div class="auth-floater" style="left: 40.3206%; animation-duration: 12.1521s; animation-delay: -19.5124s; font-size: 28.664px;">🏆</div><div class="auth-floater" style="left: 83.7505%; animation-duration: 13.2392s; animation-delay: -19.1567s; font-size: 30.4913px;">⚡</div><div class="auth-floater" style="left: 29.8781%; animation-duration: 21.1769s; animation-delay: -19.2867s; font-size: 22.2505px;">🎯</div><div class="auth-floater" style="left: 59.7096%; animation-duration: 12.8515s; animation-delay: -0.929402s; font-size: 21.2158px;">🌟</div><div class="auth-floater" style="left: 81.6619%; animation-duration: 15.5095s; animation-delay: -11.3674s; font-size: 25.9454px;">🏅</div><div class="auth-floater" style="left: 23.6716%; animation-duration: 23.9769s; animation-delay: -9.48084s; font-size: 31.6828px;">🏏</div><div class="auth-floater" style="left: 41.5639%; animation-duration: 12.6194s; animation-delay: -2.1823s; font-size: 36.2609px;">🏐</div><div class="auth-floater" style="left: 65.0138%; animation-duration: 20.0893s; animation-delay: -6.6553s; font-size: 38.3914px;">🧤</div><div class="auth-floater" style="left: 53.8072%; animation-duration: 12.2814s; animation-delay: -9.72419s; font-size: 26.9902px;">🏆</div><div class="auth-floater" style="left: 83.0224%; animation-duration: 16.9833s; animation-delay: -11.8589s; font-size: 31.151px;">⚡</div><div class="auth-floater" style="left: 23.3625%; animation-duration: 16.9506s; animation-delay: -15.881s; font-size: 34.8122px;">🎯</div></div>
+    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 64.997%; animation-duration: 16.389s; animation-delay: -5.86315s; font-size: 36.3463px;">🏏</div><div class="auth-floater" style="left: 15.6418%; animation-duration: 20.7696s; animation-delay: -5.00582s; font-size: 33.3524px;">🏐</div><div class="auth-floater" style="left: 15.4303%; animation-duration: 13.4148s; animation-delay: -17.9864s; font-size: 28.5325px;">🧤</div><div class="auth-floater" style="left: 81.8663%; animation-duration: 13.0609s; animation-delay: -10.5917s; font-size: 28.2126px;">🏆</div><div class="auth-floater" style="left: 75.8133%; animation-duration: 16.564s; animation-delay: -4.04179s; font-size: 23.0936px;">⚡</div><div class="auth-floater" style="left: 49.2279%; animation-duration: 16.5248s; animation-delay: -4.20459s; font-size: 38.1437px;">🎯</div><div class="auth-floater" style="left: 87.2281%; animation-duration: 15.4568s; animation-delay: -16.8612s; font-size: 37.9345px;">🌟</div><div class="auth-floater" style="left: 95.3004%; animation-duration: 26.9422s; animation-delay: -3.59512s; font-size: 27.6027px;">🏅</div><div class="auth-floater" style="left: 58.1213%; animation-duration: 16.5383s; animation-delay: -13.7116s; font-size: 33.6418px;">🏏</div><div class="auth-floater" style="left: 8.03497%; animation-duration: 18.9625s; animation-delay: -14.7837s; font-size: 21.2125px;">🏐</div><div class="auth-floater" style="left: 99.4715%; animation-duration: 24.9671s; animation-delay: -14.6888s; font-size: 21.4998px;">🧤</div><div class="auth-floater" style="left: 16.8975%; animation-duration: 22.6079s; animation-delay: -12.9142s; font-size: 36.3569px;">🏆</div><div class="auth-floater" style="left: 27.3767%; animation-duration: 26.538s; animation-delay: -9.87621s; font-size: 22.4147px;">⚡</div><div class="auth-floater" style="left: 62.539%; animation-duration: 16.8881s; animation-delay: -7.03891s; font-size: 28.5068px;">🎯</div></div>
   </div>
 
   <div class="auth-layout">
@@ -3031,7 +3031,7 @@ const NAV_ITEMS = [
 // APP CONTROLLER
 // ============================================================
 const App = {
-  init() {
+  async init() {
     this.buildNav();
     this.buildSidebarLeague();
     this.updateSidebarUser();
@@ -3039,6 +3039,20 @@ const App = {
     this.initLiveScore();
     window.addEventListener('hashchange', () => this.route());
     this.route();
+    // Fetch real players in the background — updates UI once loaded
+    this.loadPlayers();
+  },
+
+  async loadPlayers() {
+    const players = await PlayersDB.fetchAll();
+    if (players && players.length > 0) {
+      DB.players = players;
+      // Re-render current screen if it uses player data
+      const screen = location.hash.replace('#','') || 'home';
+      if (['players','waiver','draft','trades'].includes(screen)) {
+        this.route();
+      }
+    }
   },
 
   // Populate the sidebar footer user chip with real data from DB.currentUser
@@ -9090,6 +9104,67 @@ const Profiles = {
 
     // Keep DB.managers[0] (the "me" slot) in sync
     if (profile.full_name) DB.managers[0].name = profile.full_name;
+  },
+};
+
+// ============================================================
+// PLAYERS — read from the `players` table
+// ============================================================
+const PlayersDB = {
+
+  // Map full team names to short codes used throughout the UI
+  TEAM_ABBR: {
+    'Mumbai Indians':            'MI',
+    'Chennai Super Kings':       'CSK',
+    'Royal Challengers Bangalore': 'RCB',
+    'Kolkata Knight Riders':     'KKR',
+    'Delhi Capitals':            'DC',
+    'Punjab Kings':              'PBKS',
+    'Rajasthan Royals':          'RR',
+    'Sunrisers Hyderabad':       'SRH',
+    'Gujarat Titans':            'GT',
+    'Lucknow Super Giants':      'LSG',
+  },
+
+  // Map full role names to short codes used throughout the UI
+  ROLE_MAP: {
+    'Batsman':       'BAT',
+    'Bowler':        'BOW',
+    'All-Rounder':   'AR',
+    'Wicket-Keeper': 'WK',
+  },
+
+  // Fetch all active players and shape them for DB.players
+  async fetchAll() {
+    const { data, error } = await _supabase
+      .from('players')
+      .select('id, name, team, role, credit_value, is_active')
+      .eq('is_active', true)
+      .order('name');
+
+    if (error) {
+      console.error('[Players.fetchAll]', error.message);
+      return null;
+    }
+
+    return data.map(p => ({
+      id:           p.id,
+      name:         p.name,
+      team:         this.TEAM_ABBR[p.team] || p.team,
+      teamFull:     p.team,
+      role:         this.ROLE_MAP[p.role] || p.role,
+      creditValue:  parseFloat(p.credit_value) || 8.0,
+      // Stats, pts, form are placeholders until real scoring is wired
+      pts:          0,
+      projectedPts: 0,
+      form:         [0, 0, 0, 0, 0],
+      drafted:      false,
+      owner:        null,
+      stats: {
+        tournament: { matches:0, runs:0, avg:0, sr:0, fifties:0, hundreds:0, wickets:0, economy:null, catches:0, runOuts:0, stumpings:0 },
+        career:     { matches:0, runs:0, avg:0, sr:0, fifties:0, hundreds:0, wickets:0, economy:null, catches:0, runOuts:0, stumpings:0 },
+      },
+    }));
   },
 };
 
