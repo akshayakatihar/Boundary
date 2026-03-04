@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0046)file:///C:/Users/Akshay/Downloads/index_7.html -->
+<!-- saved from url=(0046)file:///C:/Users/Akshay/Downloads/index_8.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <!--
 =============================================================================
@@ -34,7 +34,34 @@ TECH STACK RECOMMENDATION FOR PRODUCTION:
 <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
 <link href="./index_files/css2" rel="stylesheet">
 <!-- Supabase JS SDK -->
-<script src="./index_files/supabase.min.js.download"></script>
+<script>
+// Load Supabase SDK with multiple CDN fallbacks
+(function() {
+  var CDNS = [
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js',
+    'https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/supabase/2.39.3/umd/supabase.min.js'
+  ];
+  var idx = 0;
+  function tryNext() {
+    if (idx >= CDNS.length) {
+      console.error('All Supabase CDNs failed to load.');
+      return;
+    }
+    var s = document.createElement('script');
+    s.src = CDNS[idx++];
+    s.onload = function() {
+      console.log('[Supabase] loaded from', s.src);
+      window._supabaseReady = true;
+      // If DOMContentLoaded already fired, boot now
+      if (window._domReady) { initApp(); }
+    };
+    s.onerror = function() { console.warn('[Supabase] failed:', s.src); tryNext(); };
+    document.head.appendChild(s);
+  }
+  tryNext();
+})();
+</script><script src="./index_files/supabase.min.js.download"></script>
 <style>
 /* ============================================================
    DESIGN SYSTEM — CSS CUSTOM PROPERTIES
@@ -2175,7 +2202,7 @@ a { text-decoration: none; color: inherit; }
     <div class="auth-bg-glow auth-bg-glow-1"></div>
     <div class="auth-bg-glow auth-bg-glow-2"></div>
     <div class="auth-bg-pitch"></div>
-    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 92.146%; animation-duration: 12.853s; animation-delay: -3.88984s; font-size: 32.6645px;">🏏</div><div class="auth-floater" style="left: 13.4352%; animation-duration: 22.6076s; animation-delay: -4.76428s; font-size: 20.0745px;">🏐</div><div class="auth-floater" style="left: 86.6428%; animation-duration: 25.3261s; animation-delay: -10.7274s; font-size: 26.0865px;">🧤</div><div class="auth-floater" style="left: 36.9511%; animation-duration: 16.0934s; animation-delay: -4.36248s; font-size: 23.1357px;">🏆</div><div class="auth-floater" style="left: 0.154852%; animation-duration: 26.8152s; animation-delay: -7.62967s; font-size: 22.0244px;">⚡</div><div class="auth-floater" style="left: 72.0398%; animation-duration: 12.3286s; animation-delay: -18.0597s; font-size: 30.8256px;">🎯</div><div class="auth-floater" style="left: 78.56%; animation-duration: 15.3699s; animation-delay: -12.2817s; font-size: 39.6497px;">🌟</div><div class="auth-floater" style="left: 90.9623%; animation-duration: 24.0245s; animation-delay: -0.83541s; font-size: 30.1906px;">🏅</div><div class="auth-floater" style="left: 34.1318%; animation-duration: 19.5058s; animation-delay: -10.0873s; font-size: 27.9399px;">🏏</div><div class="auth-floater" style="left: 80.3394%; animation-duration: 18.7873s; animation-delay: -12.8437s; font-size: 24.3006px;">🏐</div><div class="auth-floater" style="left: 64.4496%; animation-duration: 23.2006s; animation-delay: -3.22022s; font-size: 24.5447px;">🧤</div><div class="auth-floater" style="left: 99.1652%; animation-duration: 16.2567s; animation-delay: -13.9647s; font-size: 22.0845px;">🏆</div><div class="auth-floater" style="left: 65.2658%; animation-duration: 12.1915s; animation-delay: -6.64472s; font-size: 39.0956px;">⚡</div><div class="auth-floater" style="left: 31.7834%; animation-duration: 25.8195s; animation-delay: -6.31892s; font-size: 26.6375px;">🎯</div></div>
+    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 45.326%; animation-duration: 22.4801s; animation-delay: -4.1258s; font-size: 35.2356px;">🏏</div><div class="auth-floater" style="left: 76.374%; animation-duration: 22.168s; animation-delay: -3.45138s; font-size: 35.8283px;">🏐</div><div class="auth-floater" style="left: 91.0247%; animation-duration: 13.0914s; animation-delay: -11.2903s; font-size: 36.3518px;">🧤</div><div class="auth-floater" style="left: 49.4644%; animation-duration: 18.748s; animation-delay: -9.02503s; font-size: 38.6393px;">🏆</div><div class="auth-floater" style="left: 7.82383%; animation-duration: 18.0077s; animation-delay: -10.2427s; font-size: 24.4658px;">⚡</div><div class="auth-floater" style="left: 41.0565%; animation-duration: 23.5589s; animation-delay: -5.38298s; font-size: 21.9452px;">🎯</div><div class="auth-floater" style="left: 91.0529%; animation-duration: 23.4967s; animation-delay: -2.50138s; font-size: 21.5665px;">🌟</div><div class="auth-floater" style="left: 86.2285%; animation-duration: 14.7535s; animation-delay: -4.36871s; font-size: 37.7114px;">🏅</div><div class="auth-floater" style="left: 35.7733%; animation-duration: 13.1487s; animation-delay: -3.2752s; font-size: 22.6755px;">🏏</div><div class="auth-floater" style="left: 90.4218%; animation-duration: 18.3481s; animation-delay: -17.2393s; font-size: 36.2512px;">🏐</div><div class="auth-floater" style="left: 86.0316%; animation-duration: 26.3493s; animation-delay: -4.24493s; font-size: 21.1031px;">🧤</div><div class="auth-floater" style="left: 28.9596%; animation-duration: 16.7155s; animation-delay: -12.4046s; font-size: 33.3271px;">🏆</div><div class="auth-floater" style="left: 73.0331%; animation-duration: 24.2901s; animation-delay: -1.2601s; font-size: 27.2244px;">⚡</div><div class="auth-floater" style="left: 51.7042%; animation-duration: 24.5311s; animation-delay: -15.7833s; font-size: 24.0928px;">🎯</div></div>
   </div>
 
   <div class="auth-layout">
@@ -8892,7 +8919,8 @@ const Onboarding = {
 // ============================================================
 const SUPABASE_URL  = 'https://slxoindracudgyyhvwfq.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNseG9pbmRyYWN1ZGd5eWh2d2ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzMzY3ODIsImV4cCI6MjA4NzkxMjc4Mn0.auUhL5I4qfhyDXlnGI-T6QRxGKZ-y21kJPw0cAaWFYo';
-const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+// _supabase client is created in initApp() once the SDK has loaded
+let _supabase = null;
 
 // ============================================================
 // PROFILES — read/write the `profiles` table
@@ -9451,7 +9479,19 @@ const Legal = {
   }
 };
 
-window.addEventListener('DOMContentLoaded', () => { Auth.init(); });
+// Boot only when BOTH the DOM is ready AND the Supabase SDK has loaded.
+// Whichever happens last triggers the app start.
+function initApp() {
+  if (!window._supabaseReady || !window._domReady) return;
+  // Initialise _supabase client here now that the SDK is loaded
+  window._supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  Auth.init();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  window._domReady = true;
+  if (window._supabaseReady) { initApp(); }
+});
 </script>
 
 
