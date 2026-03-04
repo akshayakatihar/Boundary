@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0047)file:///C:/Users/Akshay/Downloads/index_14.html -->
+<!-- saved from url=(0047)file:///C:/Users/Akshay/Downloads/index_15.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <!--
 =============================================================================
@@ -2201,7 +2201,7 @@ a { text-decoration: none; color: inherit; }
     <div class="auth-bg-glow auth-bg-glow-1"></div>
     <div class="auth-bg-glow auth-bg-glow-2"></div>
     <div class="auth-bg-pitch"></div>
-    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 29.1619%; animation-duration: 17.1354s; animation-delay: -19.6123s; font-size: 35.1769px;">🏏</div><div class="auth-floater" style="left: 18.0932%; animation-duration: 27.8417s; animation-delay: -19.768s; font-size: 24.9128px;">🏐</div><div class="auth-floater" style="left: 86.1275%; animation-duration: 20.0103s; animation-delay: -13.5927s; font-size: 32.5052px;">🧤</div><div class="auth-floater" style="left: 55.8637%; animation-duration: 22.2104s; animation-delay: -8.66849s; font-size: 38.4904px;">🏆</div><div class="auth-floater" style="left: 11.3498%; animation-duration: 19.8227s; animation-delay: -10.7265s; font-size: 26.3949px;">⚡</div><div class="auth-floater" style="left: 60.7552%; animation-duration: 21.3101s; animation-delay: -8.79831s; font-size: 30.7505px;">🎯</div><div class="auth-floater" style="left: 88.3149%; animation-duration: 16.4729s; animation-delay: -6.66925s; font-size: 23.4703px;">🌟</div><div class="auth-floater" style="left: 61.4113%; animation-duration: 18.3038s; animation-delay: -18.5422s; font-size: 23.1102px;">🏅</div><div class="auth-floater" style="left: 57.1926%; animation-duration: 26.6056s; animation-delay: -4.15953s; font-size: 33.4505px;">🏏</div><div class="auth-floater" style="left: 15.1502%; animation-duration: 16.5288s; animation-delay: -15.5594s; font-size: 26.0632px;">🏐</div><div class="auth-floater" style="left: 86.3823%; animation-duration: 15.2917s; animation-delay: -18.1939s; font-size: 35.3708px;">🧤</div><div class="auth-floater" style="left: 94.9533%; animation-duration: 14.1738s; animation-delay: -18.0532s; font-size: 20.2566px;">🏆</div><div class="auth-floater" style="left: 93.5451%; animation-duration: 18.6244s; animation-delay: -15.9388s; font-size: 20.6016px;">⚡</div><div class="auth-floater" style="left: 9.84777%; animation-duration: 16.9094s; animation-delay: -17.0355s; font-size: 31.6885px;">🎯</div></div>
+    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 15.7037%; animation-duration: 27.9062s; animation-delay: -17.6025s; font-size: 39.3808px;">🏏</div><div class="auth-floater" style="left: 96.2441%; animation-duration: 16.7424s; animation-delay: -10.7746s; font-size: 37.2623px;">🏐</div><div class="auth-floater" style="left: 95.9499%; animation-duration: 21.6451s; animation-delay: -13.7437s; font-size: 25.7541px;">🧤</div><div class="auth-floater" style="left: 40.3206%; animation-duration: 12.1521s; animation-delay: -19.5124s; font-size: 28.664px;">🏆</div><div class="auth-floater" style="left: 83.7505%; animation-duration: 13.2392s; animation-delay: -19.1567s; font-size: 30.4913px;">⚡</div><div class="auth-floater" style="left: 29.8781%; animation-duration: 21.1769s; animation-delay: -19.2867s; font-size: 22.2505px;">🎯</div><div class="auth-floater" style="left: 59.7096%; animation-duration: 12.8515s; animation-delay: -0.929402s; font-size: 21.2158px;">🌟</div><div class="auth-floater" style="left: 81.6619%; animation-duration: 15.5095s; animation-delay: -11.3674s; font-size: 25.9454px;">🏅</div><div class="auth-floater" style="left: 23.6716%; animation-duration: 23.9769s; animation-delay: -9.48084s; font-size: 31.6828px;">🏏</div><div class="auth-floater" style="left: 41.5639%; animation-duration: 12.6194s; animation-delay: -2.1823s; font-size: 36.2609px;">🏐</div><div class="auth-floater" style="left: 65.0138%; animation-duration: 20.0893s; animation-delay: -6.6553s; font-size: 38.3914px;">🧤</div><div class="auth-floater" style="left: 53.8072%; animation-duration: 12.2814s; animation-delay: -9.72419s; font-size: 26.9902px;">🏆</div><div class="auth-floater" style="left: 83.0224%; animation-duration: 16.9833s; animation-delay: -11.8589s; font-size: 31.151px;">⚡</div><div class="auth-floater" style="left: 23.3625%; animation-duration: 16.9506s; animation-delay: -15.881s; font-size: 34.8122px;">🎯</div></div>
   </div>
 
   <div class="auth-layout">
@@ -9404,14 +9404,30 @@ const Auth = {
   async signOut() {
     await _supabase.auth.signOut();
     // Clear local state
+    DB.currentUser = { id: null, name: '', email: '', isCommissioner: false, teamName: '', avatarUrl: null };
     State.hasLeague = false;
     State.myLeagues = [];
     State.isNewUser = false;
-    // Show auth screen again
+    // Fade out app, fade in auth screen
     const authEl = document.getElementById('auth-screen');
     const appEl  = document.getElementById('app-shell');
-    if (appEl)  { appEl.style.opacity = '0'; setTimeout(() => { appEl.style.display = 'none'; }, 400); }
-    if (authEl) { authEl.style.display = 'flex'; setTimeout(() => { authEl.classList.add('visible'); }, 10); }
+    if (appEl) {
+      appEl.style.opacity = '0';
+      setTimeout(() => { appEl.style.display = 'none'; }, 400);
+    }
+    if (authEl) {
+      authEl.classList.remove('visible');
+      authEl.style.opacity = '0';
+      authEl.style.display = 'flex';
+      authEl.style.transition = 'opacity 0.4s ease';
+      setTimeout(() => {
+        authEl.style.opacity = '1';
+        authEl.classList.add('visible');
+      }, 50);
+    }
+    // Reset the auth form back to login mode
+    Auth.setMode('login');
+    Auth.clearError();
   },
 
   async enterApp(isNewUser) {
