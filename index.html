@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0047)file:///C:/Users/Akshay/Downloads/index_10.html -->
+<!-- saved from url=(0047)file:///C:/Users/Akshay/Downloads/index_11.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <!--
 =============================================================================
@@ -2201,7 +2201,7 @@ a { text-decoration: none; color: inherit; }
     <div class="auth-bg-glow auth-bg-glow-1"></div>
     <div class="auth-bg-glow auth-bg-glow-2"></div>
     <div class="auth-bg-pitch"></div>
-    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 84.357%; animation-duration: 27.9734s; animation-delay: -19.5398s; font-size: 32.5241px;">🏏</div><div class="auth-floater" style="left: 40.7451%; animation-duration: 12.5298s; animation-delay: -11.4615s; font-size: 34.4219px;">🏐</div><div class="auth-floater" style="left: 40.9137%; animation-duration: 12.442s; animation-delay: -4.01862s; font-size: 34.6842px;">🧤</div><div class="auth-floater" style="left: 4.28157%; animation-duration: 13.1713s; animation-delay: -9.92516s; font-size: 20.1742px;">🏆</div><div class="auth-floater" style="left: 29.6467%; animation-duration: 18.4501s; animation-delay: -18.6562s; font-size: 29.4074px;">⚡</div><div class="auth-floater" style="left: 85.9327%; animation-duration: 19.7136s; animation-delay: -17.3236s; font-size: 26.7098px;">🎯</div><div class="auth-floater" style="left: 34.6084%; animation-duration: 19.1253s; animation-delay: -19.3942s; font-size: 22.9715px;">🌟</div><div class="auth-floater" style="left: 27.6421%; animation-duration: 27.3501s; animation-delay: -18.8674s; font-size: 24.4573px;">🏅</div><div class="auth-floater" style="left: 34.137%; animation-duration: 24.7516s; animation-delay: -1.59893s; font-size: 36.5277px;">🏏</div><div class="auth-floater" style="left: 9.1309%; animation-duration: 19.8798s; animation-delay: -8.35438s; font-size: 21.6953px;">🏐</div><div class="auth-floater" style="left: 28.6772%; animation-duration: 26.0939s; animation-delay: -0.305139s; font-size: 26.1527px;">🧤</div><div class="auth-floater" style="left: 75.7763%; animation-duration: 27.8595s; animation-delay: -0.761521s; font-size: 31.6567px;">🏆</div><div class="auth-floater" style="left: 64.127%; animation-duration: 15.1784s; animation-delay: -17.8666s; font-size: 29.4559px;">⚡</div><div class="auth-floater" style="left: 21.1862%; animation-duration: 26.4118s; animation-delay: -5.02552s; font-size: 37.7792px;">🎯</div></div>
+    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 74.2615%; animation-duration: 24.8444s; animation-delay: -13.4661s; font-size: 30.1338px;">🏏</div><div class="auth-floater" style="left: 39.2525%; animation-duration: 26.2096s; animation-delay: -14.7039s; font-size: 23.6px;">🏐</div><div class="auth-floater" style="left: 45.4397%; animation-duration: 24.2926s; animation-delay: -0.641248s; font-size: 21.366px;">🧤</div><div class="auth-floater" style="left: 85.2876%; animation-duration: 19.3209s; animation-delay: -12.9626s; font-size: 20.5368px;">🏆</div><div class="auth-floater" style="left: 42.2004%; animation-duration: 14.3769s; animation-delay: -1.71895s; font-size: 25.2285px;">⚡</div><div class="auth-floater" style="left: 27.2833%; animation-duration: 25.1626s; animation-delay: -0.996724s; font-size: 24.9683px;">🎯</div><div class="auth-floater" style="left: 32.8732%; animation-duration: 21.5986s; animation-delay: -6.08814s; font-size: 31.611px;">🌟</div><div class="auth-floater" style="left: 79.1578%; animation-duration: 15.8185s; animation-delay: -0.288814s; font-size: 31.8848px;">🏅</div><div class="auth-floater" style="left: 50.6225%; animation-duration: 20.3097s; animation-delay: -6.9638s; font-size: 27.3482px;">🏏</div><div class="auth-floater" style="left: 65.4382%; animation-duration: 17.0976s; animation-delay: -9.39774s; font-size: 20.3184px;">🏐</div><div class="auth-floater" style="left: 66.2675%; animation-duration: 18.282s; animation-delay: -14.2815s; font-size: 34.7588px;">🧤</div><div class="auth-floater" style="left: 46.5633%; animation-duration: 24.1332s; animation-delay: -5.90934s; font-size: 21.6857px;">🏆</div><div class="auth-floater" style="left: 31.607%; animation-duration: 24.3811s; animation-delay: -1.70937s; font-size: 23.9751px;">⚡</div><div class="auth-floater" style="left: 59.485%; animation-duration: 16.9221s; animation-delay: -10.1822s; font-size: 24.9478px;">🎯</div></div>
   </div>
 
   <div class="auth-layout">
@@ -8827,10 +8827,47 @@ const Onboarding = {
 
   handleCodeInput(val) {
     this.joinCode = val.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 6);
-    this.foundLeague = DB.joinableLeagues[this.joinCode] || null;
-    this.joinFound = !!this.foundLeague;
+    this.joinFound = false;
+    this.foundLeague = null;
     this.render();
-    // Restore focus + cursor position
+    // Restore focus
+    setTimeout(() => {
+      const inp = document.getElementById('ob-join-code');
+      if (inp) { inp.focus(); inp.value = this.joinCode; inp.setSelectionRange(inp.value.length, inp.value.length); }
+    }, 10);
+    // Query Supabase once we have a full 6-char code
+    if (this.joinCode.length === 6) {
+      this._lookupCode(this.joinCode);
+    }
+  },
+
+  async _lookupCode(code) {
+    const { data, error } = await _supabase
+      .from('leagues')
+      .select('id, name, code, tournament, draft_type, max_managers, status')
+      .eq('code', code)
+      .single();
+
+    // Only apply result if the code hasn't changed while we were waiting
+    if (this.joinCode !== code) return;
+
+    if (error || !data) {
+      this.foundLeague = null;
+      this.joinFound = false;
+    } else {
+      // Shape the result to match what the UI expects
+      this.foundLeague = {
+        id:         data.id,
+        name:       data.name,
+        tournament: data.tournament || 'IPL 2025',
+        draftType:  data.draft_type || 'Snake',
+        size:       data.max_managers || 6,
+        filled:     '?',   // will wire properly when rosters are live
+      };
+      this.joinFound = true;
+    }
+    this.render();
+    // Restore focus after re-render
     setTimeout(() => {
       const inp = document.getElementById('ob-join-code');
       if (inp) { inp.focus(); inp.value = this.joinCode; inp.setSelectionRange(inp.value.length, inp.value.length); }
@@ -8848,7 +8885,7 @@ const Onboarding = {
     this.render();
   },
 
-  createLeague() {
+  async createLeague() {
     const nameEl = document.getElementById('ob-league-name');
     if (nameEl) this.leagueName = nameEl.value.trim();
     if (!this.leagueName) {
@@ -8856,13 +8893,74 @@ const Onboarding = {
       nameEl && (nameEl.style.borderColor = 'var(--red)');
       return;
     }
-    // In production: POST /api/leagues — for now just advance
+
+    // Show loading state
+    const btn = document.querySelector('.onboard-footer .btn-primary');
+    if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+
+    const userId = DB.currentUser.id;
+
+    // Insert the league row
+    const { data: league, error: leagueErr } = await _supabase
+      .from('leagues')
+      .insert({
+        name:            this.leagueName,
+        code:            this.leagueCode,
+        commissioner_id: userId,
+        max_managers:    this.leagueSize,
+        draft_type:      this.draftType,
+        tournament:      'IPL 2025',
+        status:          'setup',
+      })
+      .select()
+      .single();
+
+    if (leagueErr) {
+      console.error('[Onboarding.createLeague]', leagueErr.message);
+      App.toast('❌ Could not create league. Please try again.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Create League 🚀'; }
+      return;
+    }
+
+    // Add creator as first member with commissioner role
+    const { error: memberErr } = await _supabase
+      .from('league_members')
+      .insert({ league_id: league.id, user_id: userId, role: 'commissioner' });
+
+    if (memberErr) {
+      console.error('[Onboarding.createLeague] member insert:', memberErr.message);
+    }
+
+    // Store league id for finish()
+    this.createdLeagueId = league.id;
     this.step = 3;
     this.render();
   },
 
-  joinLeague() {
-    if (!this.joinFound) return;
+  async joinLeague() {
+    if (!this.joinFound || !this.foundLeague) return;
+
+    const btn = document.querySelector('.onboard-footer .btn-primary');
+    if (btn) { btn.disabled = true; btn.textContent = 'Joining…'; }
+
+    const userId = DB.currentUser.id;
+
+    const { error } = await _supabase
+      .from('league_members')
+      .insert({ league_id: this.foundLeague.id, user_id: userId, role: 'member' });
+
+    if (error) {
+      // Unique constraint = already a member
+      if (error.code === '23505') {
+        App.toast("ℹ️ You're already a member of this league.");
+      } else {
+        console.error('[Onboarding.joinLeague]', error.message);
+        App.toast('❌ Could not join league. Please try again.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Join League →'; }
+        return;
+      }
+    }
+
     this.step = 3;
     this.render();
   },
@@ -8873,42 +8971,46 @@ const Onboarding = {
     }
   },
 
-  finish() {
+  async finish() {
     const isJoin = this.path === 'join';
     this.close();
 
-    // Build the new league entry
-    const newEntry = isJoin ? {
-      name: this.foundLeague.name,
-      meta: `${this.foundLeague.tournament} · ${this.foundLeague.draftType} Draft`,
-      code: this.joinCode,
-      type: 'joined'
-    } : {
-      name: this.leagueName || 'My League',
-      meta: `${this.leagueSize} managers · ${this.draftType.charAt(0).toUpperCase() + this.draftType.slice(1)} Draft`,
-      code: this.leagueCode,
-      type: 'created'
-    };
+    // Re-fetch the user's leagues from Supabase to get the canonical list
+    const userId = DB.currentUser.id;
+    const leagues = await Leagues.fetchMyLeagues(userId);
 
-    // Load existing leagues, add new one, persist
-    const userId = DB.currentUser.id || 'guest';
-    const existing = JSON.parse(localStorage.getItem('bb_myLeagues_' + userId) || '[]');
-    existing.push(newEntry);
-    localStorage.setItem('bb_myLeagues_' + userId, JSON.stringify(existing));
+    // Fall back to building entry from local state if fetch fails
+    if (!leagues || leagues.length === 0) {
+      const newEntry = isJoin ? {
+        name: this.foundLeague.name,
+        meta: `${this.foundLeague.tournament} · ${this.foundLeague.draftType} Draft`,
+        code: this.joinCode,
+        type: 'joined'
+      } : {
+        name: this.leagueName || 'My League',
+        meta: `${this.leagueSize} managers · ${this.draftType.charAt(0).toUpperCase() + this.draftType.slice(1)} Draft`,
+        code: this.leagueCode,
+        type: 'created'
+      };
+      State.myLeagues = [newEntry];
+    } else {
+      State.myLeagues = leagues;
+    }
 
-    // Update State
-    State.myLeagues = existing;
+    // Cache to localStorage as fallback for next load
+    const userId2 = DB.currentUser.id || 'guest';
+    localStorage.setItem('bb_myLeagues_' + userId2, JSON.stringify(State.myLeagues));
+
     State.hasLeague = true;
-    State.activeLeagueIndex = existing.length - 1; // newest is active
-    // Set routing flags based on newest league
+    State.activeLeagueIndex = State.myLeagues.length - 1;
     State.newLeague    = !isJoin;
     State.joinedLeague = isJoin;
-    localStorage.setItem('bb_activeLeagueIndex_' + userId, String(existing.length - 1));
+    localStorage.setItem('bb_activeLeagueIndex_' + userId2, String(State.myLeagues.length - 1));
 
     App.buildSidebarLeague();
     App.render();
     App.toast(isJoin
-      ? `🎉 You've joined ${newEntry.name}!`
+      ? `🎉 You've joined ${this.foundLeague?.name || 'the league'}!`
       : `🎉 League created! Share your invite code to fill the roster.`);
   }
 };
@@ -8992,6 +9094,38 @@ const Profiles = {
   },
 };
 
+// ============================================================
+// LEAGUES — read/write leagues + league_members tables
+// ============================================================
+const Leagues = {
+
+  // Fetch all leagues the current user belongs to, shaped for State.myLeagues
+  async fetchMyLeagues(userId) {
+    const { data, error } = await _supabase
+      .from('league_members')
+      .select('role, league:leagues(id, name, code, tournament, draft_type, max_managers, commissioner_id)')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('[Leagues.fetchMyLeagues]', error.message);
+      return null;
+    }
+
+    return (data || []).map(row => {
+      const l = row.league;
+      const isCommissioner = l.commissioner_id === userId;
+      return {
+        id:   l.id,
+        name: l.name,
+        code: l.code,
+        meta: `${l.max_managers} managers · ${(l.draft_type || 'snake').charAt(0).toUpperCase() + (l.draft_type || 'snake').slice(1)} Draft`,
+        type: isCommissioner ? 'created' : 'joined',
+        tournament: l.tournament,
+      };
+    });
+  },
+};
+
 const Auth = {
   mode: 'login', // 'login' | 'signup'
 
@@ -9062,9 +9196,17 @@ const Auth = {
     const profile = await Profiles.load(user.id);
     Profiles.applyToState(profile);
 
-    // Restore league state from localStorage (survives refresh)
-    const stored = localStorage.getItem('bb_myLeagues_' + user.id);
-    State.myLeagues = stored ? JSON.parse(stored) : [];
+    // Restore league state — try Supabase first, fall back to localStorage cache
+    const fetchedLeagues = await Leagues.fetchMyLeagues(user.id);
+    if (fetchedLeagues && fetchedLeagues.length > 0) {
+      State.myLeagues = fetchedLeagues;
+      // Keep localStorage in sync as cache
+      localStorage.setItem('bb_myLeagues_' + user.id, JSON.stringify(fetchedLeagues));
+    } else {
+      // Fall back to localStorage (e.g. offline or first load before any league)
+      const stored = localStorage.getItem('bb_myLeagues_' + user.id);
+      State.myLeagues = stored ? JSON.parse(stored) : [];
+    }
     State.hasLeague = State.myLeagues.length > 0;
     State.activeLeagueIndex = parseInt(localStorage.getItem('bb_activeLeagueIndex_' + user.id) || '0', 10);
     const active = State.myLeagues[State.activeLeagueIndex];
