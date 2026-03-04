@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0047)file:///C:/Users/Akshay/Downloads/index_13.html -->
+<!-- saved from url=(0047)file:///C:/Users/Akshay/Downloads/index_14.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <!--
 =============================================================================
@@ -2201,7 +2201,7 @@ a { text-decoration: none; color: inherit; }
     <div class="auth-bg-glow auth-bg-glow-1"></div>
     <div class="auth-bg-glow auth-bg-glow-2"></div>
     <div class="auth-bg-pitch"></div>
-    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 61.1793%; animation-duration: 18.3509s; animation-delay: -8.14208s; font-size: 29.6463px;">🏏</div><div class="auth-floater" style="left: 63.1474%; animation-duration: 26.845s; animation-delay: -19.5018s; font-size: 20.4302px;">🏐</div><div class="auth-floater" style="left: 88.4944%; animation-duration: 15.0346s; animation-delay: -16.0191s; font-size: 36.6682px;">🧤</div><div class="auth-floater" style="left: 18.2303%; animation-duration: 19.7462s; animation-delay: -16.6717s; font-size: 36.3842px;">🏆</div><div class="auth-floater" style="left: 61.8418%; animation-duration: 17.1964s; animation-delay: -13.2457s; font-size: 37.7529px;">⚡</div><div class="auth-floater" style="left: 56.6885%; animation-duration: 23.9005s; animation-delay: -18.7085s; font-size: 28.6983px;">🎯</div><div class="auth-floater" style="left: 84.3326%; animation-duration: 12.0259s; animation-delay: -3.49197s; font-size: 33.9378px;">🌟</div><div class="auth-floater" style="left: 59.0357%; animation-duration: 25.0031s; animation-delay: -9.91704s; font-size: 33.7223px;">🏅</div><div class="auth-floater" style="left: 33.111%; animation-duration: 21.7283s; animation-delay: -0.85601s; font-size: 37.1893px;">🏏</div><div class="auth-floater" style="left: 90.9168%; animation-duration: 26.4585s; animation-delay: -4.58605s; font-size: 21.3396px;">🏐</div><div class="auth-floater" style="left: 90.3195%; animation-duration: 13.18s; animation-delay: -0.0381637s; font-size: 39.2939px;">🧤</div><div class="auth-floater" style="left: 29.9198%; animation-duration: 26.7027s; animation-delay: -12.2307s; font-size: 34.2813px;">🏆</div><div class="auth-floater" style="left: 52.2149%; animation-duration: 18.9957s; animation-delay: -11.1552s; font-size: 23.2278px;">⚡</div><div class="auth-floater" style="left: 44.6566%; animation-duration: 17.3404s; animation-delay: -6.62271s; font-size: 37.3055px;">🎯</div></div>
+    <div class="auth-floaters" id="auth-floaters"><div class="auth-floater" style="left: 29.1619%; animation-duration: 17.1354s; animation-delay: -19.6123s; font-size: 35.1769px;">🏏</div><div class="auth-floater" style="left: 18.0932%; animation-duration: 27.8417s; animation-delay: -19.768s; font-size: 24.9128px;">🏐</div><div class="auth-floater" style="left: 86.1275%; animation-duration: 20.0103s; animation-delay: -13.5927s; font-size: 32.5052px;">🧤</div><div class="auth-floater" style="left: 55.8637%; animation-duration: 22.2104s; animation-delay: -8.66849s; font-size: 38.4904px;">🏆</div><div class="auth-floater" style="left: 11.3498%; animation-duration: 19.8227s; animation-delay: -10.7265s; font-size: 26.3949px;">⚡</div><div class="auth-floater" style="left: 60.7552%; animation-duration: 21.3101s; animation-delay: -8.79831s; font-size: 30.7505px;">🎯</div><div class="auth-floater" style="left: 88.3149%; animation-duration: 16.4729s; animation-delay: -6.66925s; font-size: 23.4703px;">🌟</div><div class="auth-floater" style="left: 61.4113%; animation-duration: 18.3038s; animation-delay: -18.5422s; font-size: 23.1102px;">🏅</div><div class="auth-floater" style="left: 57.1926%; animation-duration: 26.6056s; animation-delay: -4.15953s; font-size: 33.4505px;">🏏</div><div class="auth-floater" style="left: 15.1502%; animation-duration: 16.5288s; animation-delay: -15.5594s; font-size: 26.0632px;">🏐</div><div class="auth-floater" style="left: 86.3823%; animation-duration: 15.2917s; animation-delay: -18.1939s; font-size: 35.3708px;">🧤</div><div class="auth-floater" style="left: 94.9533%; animation-duration: 14.1738s; animation-delay: -18.0532s; font-size: 20.2566px;">🏆</div><div class="auth-floater" style="left: 93.5451%; animation-duration: 18.6244s; animation-delay: -15.9388s; font-size: 20.6016px;">⚡</div><div class="auth-floater" style="left: 9.84777%; animation-duration: 16.9094s; animation-delay: -17.0355s; font-size: 31.6885px;">🎯</div></div>
   </div>
 
   <div class="auth-layout">
@@ -8826,7 +8826,7 @@ const Onboarding = {
   },
 
   handleCodeInput(val) {
-    this.joinCode = val.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 6);
+    this.joinCode = val.toUpperCase().replace(/[^A-Z0-9-]/g, '').substring(0, 7);
     this.joinFound = false;
     this.foundLeague = null;
     this.render();
@@ -8836,7 +8836,7 @@ const Onboarding = {
       if (inp) { inp.focus(); inp.value = this.joinCode; inp.setSelectionRange(inp.value.length, inp.value.length); }
     }, 10);
     // Query Supabase once we have a full 6-char code
-    if (this.joinCode.length === 6) {
+    if (this.joinCode.length >= 6) {
       this._lookupCode(this.joinCode);
     }
   },
