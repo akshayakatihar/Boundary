@@ -8562,6 +8562,11 @@ const Commissioner = {
     const drafted  = State.draftPhase === 'live' || State.draftPhase === 'complete';
     const lockNote = '<div style="font-size:11px;color:var(--red);margin-top:6px">🔒 Cannot change after draft has started</div>';
 
+    // Ensure order always reflects real managers (never bots)
+    if (!s.order || !Array.isArray(s.order) || s.order.length !== managers.length) {
+      s.order = managers.map(m => m.id);
+    }
+
     const draftOrderHTML = `
     <div style="margin-top:12px">
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);margin-bottom:10px">Round 1 Draft Order</div>
@@ -8828,8 +8833,8 @@ const Commissioner = {
       const activeLg = State.myLeagues[State.activeLeagueIndex];
       const settingsToSave = {
         league:  {
-          maxManagers:   activeLg?.maxMembers || DB.settings.league?.maxManagers,
-          name:          activeLg?.name       || DB.settings.league?.name || '',
+          maxManagers:   activeLg?.maxMembers  || DB.settings.league?.maxManagers,
+          name:          activeLg?.name        || DB.settings.league?.name || '',
           startersCount: DB.settings.league?.startersCount,
           benchCount:    DB.settings.league?.benchCount,
           tournament:    DB.settings.league?.tournament,
@@ -8840,7 +8845,6 @@ const Commissioner = {
           date:          DB.settings.draft?.date,
           time:          DB.settings.draft?.time,
           timezone:      DB.settings.draft?.timezone,
-          // order derived from real managers only — no bot IDs
           order:         DB.managers.map(m => m.id),
         },
         scoring: DB.settings.scoring || {},
@@ -9970,9 +9974,15 @@ const Auth = {
           DB.settings[section] = Object.assign({}, DB.settings[section], saved[section]);
         }
       });
+      // Always override with ground-truth values from the leagues table row
+      if (active.maxMembers) DB.settings.league.maxManagers = active.maxMembers;
+      if (active.name)       DB.settings.league.name        = active.name;
       console.log('[BOOT] settings applied from Supabase:', JSON.stringify(saved).slice(0, 200));
     } else {
       console.log('[BOOT] no saved settings to apply (settings is empty or missing)');
+      // Still apply ground-truth values even when no saved settings
+      if (active?.maxMembers) DB.settings.league.maxManagers = active.maxMembers;
+      if (active?.name)       DB.settings.league.name        = active.name;
     }
 
     // Load persisted roster from Supabase (only if draft did not already set it)
