@@ -8825,9 +8825,24 @@ const Commissioner = {
         return;
       }
 
+      const activeLg = State.myLeagues[State.activeLeagueIndex];
       const settingsToSave = {
-        league:  { maxManagers: DB.settings.league?.maxManagers, name: DB.settings.league?.name, startersCount: DB.settings.league?.startersCount, benchCount: DB.settings.league?.benchCount },
-        draft:   { pickTimerSecs: DB.settings.draft?.pickTimerSecs, date: DB.settings.draft?.date, time: DB.settings.draft?.time },
+        league:  {
+          maxManagers:   activeLg?.maxMembers || DB.settings.league?.maxManagers,
+          name:          activeLg?.name       || DB.settings.league?.name || '',
+          startersCount: DB.settings.league?.startersCount,
+          benchCount:    DB.settings.league?.benchCount,
+          tournament:    DB.settings.league?.tournament,
+          isPublic:      DB.settings.league?.isPublic,
+        },
+        draft:   {
+          pickTimerSecs: DB.settings.draft?.pickTimerSecs,
+          date:          DB.settings.draft?.date,
+          time:          DB.settings.draft?.time,
+          timezone:      DB.settings.draft?.timezone,
+          // order derived from real managers only — no bot IDs
+          order:         DB.managers.map(m => m.id),
+        },
         scoring: DB.settings.scoring || {},
         waiver:  DB.settings.waiver  || {},
       };
