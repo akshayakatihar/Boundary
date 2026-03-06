@@ -8811,25 +8811,34 @@ const Commissioner = {
 
   // Persist DB.settings + league name to Supabase, and sync sidebar
   async _persistSettings() {
-    const leagueId = DB.league?.id;
-    // Always sync the sidebar name from DB.settings.league.name
     const lg = State.myLeagues[State.activeLeagueIndex];
+    const leagueId = lg?.id;
+
+    // Always sync the sidebar name from DB.settings.league.name
     if (lg) {
       lg.name = DB.settings.league.name;
       DB.league.name = DB.settings.league.name;
       App.renderLeagueSwitcher();
     }
-    if (!leagueId || !_supabase) return;
+    if (!leagueId || !_supabase) {
+      console.warn('[_persistSettings] no leagueId — settings not saved. lg:', lg);
+      return;
+    }
     const payload = {
       name:        DB.settings.league.name,
       max_members: DB.settings.league.maxManagers,
       settings:    DB.settings,
     };
+    console.log('[_persistSettings] saving to league', leagueId, '| pickTimerSecs:', DB.settings.draft?.pickTimerSecs);
     const { error } = await _supabase
       .from('leagues')
       .update(payload)
       .eq('id', leagueId);
     if (error) console.error('[Commissioner._persistSettings]', error.message);
+    else {
+      // Keep the cached league object in sync so re-renders use updated settings
+      if (lg) lg.settings = DB.settings;
+    }
   },
 
   moveDraftOrder(idx, dir) {
@@ -9930,13 +9939,16 @@ const Auth = {
     }
 
     // Apply persisted league settings using deep merge (so nested keys like draft.pickTimerSecs apply)
-    if (active && active.settings) {
+    if (active && active.settings && Object.keys(active.settings).length > 0) {
       const saved = active.settings;
       ['league','draft','scoring','waiver','schedule'].forEach(section => {
-        if (saved[section]) {
+        if (saved[section] && typeof saved[section] === 'object') {
           DB.settings[section] = Object.assign({}, DB.settings[section], saved[section]);
         }
       });
+      console.log('[BOOT] settings applied from Supabase:', JSON.stringify(saved).slice(0, 200));
+    } else {
+      console.log('[BOOT] no saved settings to apply (settings is empty or missing)');
     }
 
     // Load persisted roster from Supabase (only if draft did not already set it)
