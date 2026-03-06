@@ -8321,7 +8321,6 @@ const Commissioner = {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
       <div>
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3)">${label}</div>
-        <div style="font-size:14px;font-weight:600;margin-top:2px" id="display-${key}">${value}</div>
       </div>
       <div style="display:flex;align-items:center;justify-content:flex-end">
         ${isComm ? editContent : `<span style="font-size:12px;color:var(--text-3)">—</span>`}
@@ -8602,11 +8601,11 @@ const Commissioner = {
       ${drafted ? `<div style="padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:var(--radius-md);font-size:12px;color:var(--red);margin-bottom:16px">
         🔒 The draft is underway. All draft settings are now read-only.
       </div>` : ''}
-      ${this.fieldRow('Draft Date',  s.date,                  drafted ? lockNote : `${this.inputField('set-draft-date', s.date, 'date')} ${this.saveBtn("Commissioner.save('draft','date','set-draft-date')")}`,           'draft-date')}
-      ${this.fieldRow('Draft Time',  s.time + ' ' + s.timezone, drafted ? lockNote : `${this.inputField('set-draft-time', s.time, 'time')} ${this.saveBtn("Commissioner.save('draft','time','set-draft-time')")}`,         'draft-time')}
-      ${this.fieldRow('Draft Type',  '🐍 Snake Draft',         '<span style="font-size:12px;color:var(--text-3)">Only snake drafts are supported</span>',                                                                   'draft-type')}
+      ${this.fieldRow('Draft Date',  s.date, drafted ? lockNote : `${this.inputField('set-draft-date', s.date, 'date')} ${this.saveBtn("Commissioner.save('draft','date','set-draft-date')")}`, 'draft-date')}
+      ${this.fieldRow('Draft Time',  s.time + (s.timezone ? ' ' + s.timezone : ''), drafted ? lockNote : `${this.inputField('set-draft-time', s.time, 'time')} ${this.saveBtn("Commissioner.save('draft','time','set-draft-time')")}`, 'draft-time')}
+      ${this.fieldRow('Draft Type',  '🐍 Snake Draft', '<span style="font-size:12px;color:var(--text-3)">Only snake drafts are supported</span>', 'draft-type')}
       ${this.fieldRow('Pick Timer',  s.pickTimerSecs + ' seconds', drafted ? lockNote : `${this.selectField('set-pick-timer', [['15','15s'],['30','30s'],['45','45s'],['60','60s'],['90','90s'],['120','2 min']], String(s.pickTimerSecs))} ${this.saveBtn("Commissioner.save('draft','pickTimerSecs','set-pick-timer',true)")}`, 'draft-timer')}
-      ${this.fieldRow('Auto-Pick Rule', 'Best Available',      drafted ? lockNote : `${this.selectField('set-autopick', [['best-available','Best Available'],['queue','From Queue'],['skip','Skip (no pick)']], s.autoPick)} ${this.saveBtn("Commissioner.save('draft','autoPick','set-autopick')")}`,                           'draft-autopick')}
+      ${this.fieldRow('Auto-Pick Rule', s.autoPick || 'Best Available', drafted ? lockNote : `${this.selectField('set-autopick', [['best-available','Best Available'],['queue','From Queue'],['skip','Skip (no pick)']], s.autoPick)} ${this.saveBtn("Commissioner.save('draft','autoPick','set-autopick')")}`, 'draft-autopick')}
     `) + this.card('Draft Order', drafted ? 'Read-only after draft start 🔒' : 'Who picks when in Round 1', draftOrderHTML);
   },
 
@@ -8808,11 +8807,11 @@ const Commissioner = {
     if (val === 'true') val = true;
     if (val === 'false') val = false;
     DB.settings[section][key] = val;
-    const disp = document.getElementById('display-' + section + '-' + key);
-    if (disp) disp.textContent = el.options ? el.options[el.selectedIndex].text : val;
     const label = key.replace(/([A-Z])/g,' $1').replace(/^./,s=>s.toUpperCase());
     App.toast(`✅ ${label} updated`);
     Commissioner._persistSettings();
+    // Re-render the current tab so display values reflect the new setting
+    Commissioner.renderTab(section === 'draft' ? 'draft' : section === 'league' ? 'league' : section === 'scoring' ? 'scoring' : section === 'waiver' ? 'waiver' : 'league');
   },
 
   // Persist DB.settings + league name to Supabase, and sync sidebar
