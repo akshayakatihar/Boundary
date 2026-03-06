@@ -5831,6 +5831,8 @@ const Draft = {
 
     State.draftSessionId = session.id;
     State.draftPickOrder = pickOrder;
+    // Re-subscribe picks channel now that we have a real session ID
+    DraftRealtime.resubscribePicks(session.id);
     // Reset any mock draft state so initDraft builds fresh from real session
     State.drafted    = [];
     State.draftPicks = {};
@@ -10212,9 +10214,125 @@ const Auth = {
     App.init(); // first render — may show partial state (e.g. no managers yet if timing was off)
     App.initDraft(); // re-run with fully hydrated DB.managers
     App.render(); // second render — always reflects fully hydrated DB.managers
+    // Subscribe to real-time draft events (session start + live picks)
+    const activeLg = State.myLeagues[State.activeLeagueIndex];
+    if (activeLg) DraftRealtime.subscribe(activeLg.id);
     if (State.isNewUser) {
       setTimeout(() => Onboarding.show(), 600);
     }
+  },
+};
+
+
+
+// ============================================================
+// DRAFT REALTIME — Supabase Realtime subscriptions
+// Listens for draft session status changes and new picks,
+// keeping all connected users in sync automatically.
+// ============================================================
+const DraftRealtime = {
+  _sessionChannel: null,
+  _picksChannel:   null,
+
+  subscribe(leagueId) {
+    if (!leagueId || !_supabase) return;
+    this.unsubscribe(); // clean up any existing subscriptions
+
+    // ── 1. Watch draft_sessions for this league ──────────────
+    this._sessionChannel = _supabase
+      .channel(`draft_session_${leagueId}`)
+      .on('postgres_changes', {
+        event:  '*',
+        schema: 'public',
+        table:  'draft_sessions',
+        filter: `league_id=eq.${leagueId}`,
+      }, async (payload) => {
+        const row = payload.new;
+        if (!row) return;
+
+        if (row.status === 'active' && State.draftPhase !== 'live') {
+          // Draft just started — restore full session state then navigate to draft
+          App.toast('🏏 Draft is starting!');
+          State.draftSessionId = row.id;
+          State.draftPickOrder = row.pick_order;
+          await DraftDB.restoreForLeague(leagueId);
+          Draft.setPhase('live');
+          App.navigate('draft');
+        }
+
+        if (row.status === 'completed' && State.draftPhase !== 'complete') {
+          Draft.setPhase('complete');
+          App.toast('✅ Draft complete!');
+        }
+      })
+      .subscribe();
+
+    // ── 2. Watch draft_picks for live pick updates ────────────
+    this._picksChannel = _supabase
+      .channel(`draft_picks_${leagueId}`)
+      .on('postgres_changes', {
+        event:  'INSERT',
+        schema: 'public',
+        table:  'draft_picks',
+        filter: `draft_session_id=eq.${State.draftSessionId || '00000000-0000-0000-0000-000000000000'}`,
+      }, async (payload) => {
+        const pick = payload.new;
+        if (!pick) return;
+        // Don't re-apply our own picks (already applied locally)
+        if (pick.picked_by === DB.currentUser.id) return;
+        // Apply the incoming pick to local state
+        const player = DB.players.find(p => p.id === pick.player_id);
+        if (player) {
+          player.drafted = true;
+          player.owner   = pick.league_member_id;
+        }
+        const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
+        if (mgr) {
+          if (!State.draftPicks[mgr.id]) State.draftPicks[mgr.id] = [];
+          State.draftPicks[mgr.id].push(pick.player_id);
+          State.drafted.push(pick.player_id);
+        }
+        State.currentPick++;
+        Draft.resetTimer();
+        App.render();
+      })
+      .subscribe();
+  },
+
+  // Re-subscribe picks channel once we have a real session ID
+  resubscribePicks(sessionId) {
+    if (!sessionId || !_supabase) return;
+    if (this._picksChannel) _supabase.removeChannel(this._picksChannel);
+    const leagueId = State.myLeagues[State.activeLeagueIndex]?.id;
+    this._picksChannel = _supabase
+      .channel(`draft_picks_${sessionId}`)
+      .on('postgres_changes', {
+        event:  'INSERT',
+        schema: 'public',
+        table:  'draft_picks',
+        filter: `draft_session_id=eq.${sessionId}`,
+      }, async (payload) => {
+        const pick = payload.new;
+        if (!pick) return;
+        if (pick.picked_by === DB.currentUser.id) return;
+        const player = DB.players.find(p => p.id === pick.player_id);
+        if (player) { player.drafted = true; player.owner = pick.league_member_id; }
+        const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
+        if (mgr) {
+          if (!State.draftPicks[mgr.id]) State.draftPicks[mgr.id] = [];
+          State.draftPicks[mgr.id].push(pick.player_id);
+          State.drafted.push(pick.player_id);
+        }
+        State.currentPick++;
+        Draft.resetTimer();
+        App.render();
+      })
+      .subscribe();
+  },
+
+  unsubscribe() {
+    if (this._sessionChannel) { _supabase.removeChannel(this._sessionChannel); this._sessionChannel = null; }
+    if (this._picksChannel)   { _supabase.removeChannel(this._picksChannel);   this._picksChannel   = null; }
   },
 };
 
