@@ -8811,41 +8811,42 @@ const Commissioner = {
 
   // Persist DB.settings + league name to Supabase, and sync sidebar
   async _persistSettings() {
-    const lg = State.myLeagues[State.activeLeagueIndex];
-    const leagueId = lg?.id;
+    try {
+      const lg = State.myLeagues[State.activeLeagueIndex];
+      const leagueId = lg?.id;
 
-    // Always sync the sidebar name from DB.settings.league.name
-    if (lg) {
-      lg.name = DB.settings.league.name;
-      DB.league.name = DB.settings.league.name;
-      App.buildSidebarLeague();
-    }
-    if (!leagueId || !_supabase) {
-      console.warn('[_persistSettings] no leagueId — settings not saved. lg:', lg);
-      return;
-    }
+      if (lg) {
+        lg.name = DB.settings.league.name;
+        DB.league.name = DB.settings.league.name;
+        App.buildSidebarLeague();
+      }
+      if (!leagueId || !_supabase) {
+        console.warn('[_persistSettings] no leagueId — settings not saved.');
+        return;
+      }
 
-    // Save only the essential nested sections (avoid non-serializable values)
-    const settingsToSave = {
-      league:   DB.settings.league   || {},
-      draft:    DB.settings.draft    || {},
-      scoring:  DB.settings.scoring  || {},
-      waiver:   DB.settings.waiver   || {},
-    };
+      const settingsToSave = {
+        league:  { maxManagers: DB.settings.league?.maxManagers, name: DB.settings.league?.name, startersCount: DB.settings.league?.startersCount, benchCount: DB.settings.league?.benchCount },
+        draft:   { pickTimerSecs: DB.settings.draft?.pickTimerSecs, date: DB.settings.draft?.date, time: DB.settings.draft?.time },
+        scoring: DB.settings.scoring || {},
+        waiver:  DB.settings.waiver  || {},
+      };
 
-    console.log('[_persistSettings] saving to league', leagueId, '| pickTimerSecs:', settingsToSave.draft?.pickTimerSecs);
-    console.log('[_persistSettings] full payload:', JSON.stringify(settingsToSave));
+      console.log('[_persistSettings] payload built:', JSON.stringify(settingsToSave));
 
-    const { error } = await _supabase
-      .from('leagues')
-      .update({ settings: settingsToSave, name: DB.settings.league.name, max_members: DB.settings.league.maxManagers })
-      .eq('id', leagueId);
+      const { error } = await _supabase
+        .from('leagues')
+        .update({ settings: settingsToSave, name: DB.settings.league.name, max_members: DB.settings.league.maxManagers })
+        .eq('id', leagueId);
 
-    if (error) {
-      console.error('[_persistSettings] SAVE FAILED:', error.message, error.details, error.hint);
-    } else {
-      console.log('[_persistSettings] save succeeded ✅');
-      if (lg) lg.settings = settingsToSave;
+      if (error) {
+        console.error('[_persistSettings] SAVE FAILED:', error.message, error.details, error.hint);
+      } else {
+        console.log('[_persistSettings] save succeeded ✅');
+        if (lg) lg.settings = settingsToSave;
+      }
+    } catch (e) {
+      console.error('[_persistSettings] EXCEPTION:', e.message, e.stack);
     }
   },
 
