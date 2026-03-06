@@ -8824,20 +8824,28 @@ const Commissioner = {
       console.warn('[_persistSettings] no leagueId — settings not saved. lg:', lg);
       return;
     }
-    const payload = {
-      name:        DB.settings.league.name,
-      max_members: DB.settings.league.maxManagers,
-      settings:    DB.settings,
+
+    // Save only the essential nested sections (avoid non-serializable values)
+    const settingsToSave = {
+      league:   DB.settings.league   || {},
+      draft:    DB.settings.draft    || {},
+      scoring:  DB.settings.scoring  || {},
+      waiver:   DB.settings.waiver   || {},
     };
-    console.log('[_persistSettings] saving to league', leagueId, '| pickTimerSecs:', DB.settings.draft?.pickTimerSecs);
+
+    console.log('[_persistSettings] saving to league', leagueId, '| pickTimerSecs:', settingsToSave.draft?.pickTimerSecs);
+    console.log('[_persistSettings] full payload:', JSON.stringify(settingsToSave));
+
     const { error } = await _supabase
       .from('leagues')
-      .update(payload)
+      .update({ settings: settingsToSave, name: DB.settings.league.name, max_members: DB.settings.league.maxManagers })
       .eq('id', leagueId);
-    if (error) console.error('[Commissioner._persistSettings]', error.message);
-    else {
-      // Keep the cached league object in sync so re-renders use updated settings
-      if (lg) lg.settings = DB.settings;
+
+    if (error) {
+      console.error('[_persistSettings] SAVE FAILED:', error.message, error.details, error.hint);
+    } else {
+      console.log('[_persistSettings] save succeeded ✅');
+      if (lg) lg.settings = settingsToSave;
     }
   },
 
