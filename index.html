@@ -8818,7 +8818,7 @@ const Commissioner = {
     if (lg) {
       lg.name = DB.settings.league.name;
       DB.league.name = DB.settings.league.name;
-      App.renderLeagueSwitcher();
+      App.buildSidebarLeague();
     }
     if (!leagueId || !_supabase) {
       console.warn('[_persistSettings] no leagueId — settings not saved. lg:', lg);
