@@ -8826,7 +8826,6 @@ const Commissioner = {
         App.buildSidebarLeague();
       }
       if (!leagueId || !_supabase) {
-        console.warn('[_persistSettings] no leagueId — settings not saved.');
         return;
       }
 
@@ -8851,7 +8850,6 @@ const Commissioner = {
         waiver:  DB.settings.waiver  || {},
       };
 
-      console.log('[_persistSettings] payload built:', JSON.stringify(settingsToSave));
 
       const { error } = await _supabase
         .from('leagues')
@@ -8861,7 +8859,6 @@ const Commissioner = {
       if (error) {
         console.error('[_persistSettings] SAVE FAILED:', error.message, error.details, error.hint);
       } else {
-        console.log('[_persistSettings] save succeeded ✅');
         if (lg) lg.settings = settingsToSave;
       }
     } catch (e) {
@@ -9544,8 +9541,6 @@ const Leagues = {
     return (data || []).filter(row => row.league).map(row => {
       const l = row.league;
       const isCommissioner = l.created_by === userId;
-      console.log('[fetchMyLeagues] league:', l.name, '| created_by:', l.created_by, '| userId:', userId, '| isCommissioner:', isCommissioner);
-      console.log('[fetchMyLeagues] raw settings:', JSON.stringify(l.settings));
       return {
         id:         l.id,
         memberId:   row.id,
@@ -9572,9 +9567,7 @@ const Leagues = {
       .eq('league_id', leagueId);
 
     if (error) { console.error('[Leagues.hydrateManagers]', error.message); return; }
-    if (!data || !data.length) { console.warn('[hydrateManagers] no members returned for league', leagueId); return; }
 
-    console.log('[hydrateManagers] raw members from DB:', data.length, data.map(m => m.user_id));
 
     // Step 2: fetch display names from profiles for all member user_ids
     const userIds = data.map(m => m.user_id).filter(Boolean);
@@ -9620,7 +9613,6 @@ const Leagues = {
 
     // Trim any excess mock slots beyond real member count so no ghost/bot slots appear
     DB.managers = DB.managers.slice(0, ordered.length);
-    console.log('[hydrateManagers] after trim:', DB.managers.length, 'managers:', DB.managers.map(m => m.name));
   },
 };
 
@@ -9977,9 +9969,7 @@ const Auth = {
       // Always override with ground-truth values from the leagues table row
       if (active.maxMembers) DB.settings.league.maxManagers = active.maxMembers;
       if (active.name)       DB.settings.league.name        = active.name;
-      console.log('[BOOT] settings applied from Supabase:', JSON.stringify(saved).slice(0, 200));
     } else {
-      console.log('[BOOT] no saved settings to apply (settings is empty or missing)');
       // Still apply ground-truth values even when no saved settings
       if (active?.maxMembers) DB.settings.league.maxManagers = active.maxMembers;
       if (active?.name)       DB.settings.league.name        = active.name;
@@ -9992,10 +9982,6 @@ const Auth = {
     }
 
     // ── Diagnostic logs — open DevTools Console to debug ──────────
-    console.log('[BOOT] managers count:', DB.managers.length, '| names:', DB.managers.map(m => `${m.name}(memberId=${m.memberId})`));
-    console.log('[BOOT] newLeague:', State.newLeague, '| joinedLeague:', State.joinedLeague, '| isCommissioner:', DB.currentUser.isCommissioner);
-    console.log('[BOOT] active league:', active?.name, '| maxMembers:', active?.maxMembers, '| settings stored:', !!active?.settings);
-    console.log('[BOOT] pickTimerSecs:', DB.settings.draft?.pickTimerSecs, '| maxManagers:', DB.settings.league?.maxManagers);
   },
 
   setMode(mode) {
@@ -10223,10 +10209,8 @@ const Auth = {
     if (appEl)  { appEl.style.display = 'flex'; setTimeout(() => { appEl.style.opacity = '1'; }, 10); }
     // Load all user + league data (includes hydrateManagers, settings, draft state)
     await this._loadUserIntoState(await _supabase.auth.getUser().then(r => r.data.user));
-    console.log('[enterApp] _loadUserIntoState complete. managers:', DB.managers.length);
     App.init(); // first render — may show partial state (e.g. no managers yet if timing was off)
     App.initDraft(); // re-run with fully hydrated DB.managers
-    console.log('[enterApp] calling final App.render() with', DB.managers.length, 'managers');
     App.render(); // second render — always reflects fully hydrated DB.managers
     if (State.isNewUser) {
       setTimeout(() => Onboarding.show(), 600);
