@@ -2690,25 +2690,17 @@ const App = {
     const players = await PlayersDB.fetchAll();
     if (players && players.length > 0) {
       DB.players = players;
-
-      // Re-apply ownership — applyToState may have run before players loaded,
-      // so stamp owner=1 on any player whose UUID is in our roster
+      // Re-apply ownership after replacing DB.players (applyToState may have run before this)
       const myIds = new Set([...DB.myTeam.players, ...DB.myTeam.bench]);
       if (myIds.size > 0) {
-        DB.players.forEach(p => {
-          if (myIds.has(p.id)) { p.drafted = true; p.owner = 1; }
-        });
+        DB.players.forEach(p => { if (myIds.has(p.id)) { p.drafted = true; p.owner = 1; } });
       }
-      // Stamp ownership for other managers too
       Object.entries(DB.rosters).forEach(([mgrId, ids]) => {
         const mid = parseInt(mgrId);
         if (mid === 1) return;
         const idSet = new Set(ids);
-        DB.players.forEach(p => {
-          if (idSet.has(p.id)) { p.drafted = true; p.owner = mid; }
-        });
+        DB.players.forEach(p => { if (idSet.has(p.id)) { p.drafted = true; p.owner = mid; } });
       });
-
       // Re-render current screen if it uses player data
       const screen = location.hash.replace('#','') || 'home';
       if (['players','waiver','draft','trades'].includes(screen)) {
@@ -5658,8 +5650,9 @@ const Draft = {
       DB.myTeam.bench   = myPicks.slice(starterCount);
       DB.rosters[1] = [...DB.myTeam.players, ...DB.myTeam.bench];
       console.log('[advancePick] draft complete — myPicks:', myPicks.length, '| starters:', DB.myTeam.players.length, '| bench:', DB.myTeam.bench.length);
-      // Persist roster + mark session complete
+      // Persist roster + mark session complete (save ALL managers, not just ours)
       Rosters.flush();
+      Rosters.saveAll(Rosters._activeLeagueId());
       if (State.draftSessionId) {
         const totalRounds = Math.ceil(State.draftOrder.length / DB.managers.length);
         DraftDB.updateSession(State.draftSessionId, State.currentPick, totalRounds, 0, 'completed');
@@ -7585,7 +7578,7 @@ const Trades = {
       rosterPlayers.forEach(function(p) {
         var added  = alreadyAdded.includes(p.id);
         var pid    = p.id;
-        var q      = String.fromCharCode(39); // single quote — avoids escaping issues
+        var q      = String.fromCharCode(39);
         var action = added
           ? '<span class="pill pill-green" style="font-size:10px">Added</span>'
           : '<button class="btn btn-primary" style="padding:5px 10px;font-size:11px" onclick="event.stopPropagation();Trades.addPlayer(' + q + pid + q + ',' + q + side + q + ')">+</button>';
@@ -7593,7 +7586,7 @@ const Trades = {
           + '<span style="font-size:18px">' + ROLES[p.role].icon + '</span>'
           + '<div style="flex:1">'
           + '<div style="font-size:13px;font-weight:600">' + p.name + '</div>'
-          + '<div style="font-size:11px;color:var(--text-2)">' + p.team + ' \xb7 ' + ROLES[p.role].label + '</div>'
+          + '<div style="font-size:11px;color:var(--text-2)">' + p.team + ' · ' + ROLES[p.role].label + '</div>'
           + '</div>'
           + '<div style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--green)">' + p.pts + '</div>'
           + action
@@ -9264,6 +9257,8 @@ const DraftDB = {
       DB.myTeam.players = myPicks.slice(0, starterCount);
       DB.myTeam.bench   = myPicks.slice(starterCount);
       DB.rosters[1]     = [...DB.myTeam.players, ...DB.myTeam.bench];
+      // Save all managers' rosters if not already in roster_slots
+      Rosters.saveAll(leagueId);
     }
   },
 };
@@ -9322,14 +9317,8 @@ const Rosters = {
       .from('roster_slots')
       .select('user_id, player_ids, bench_ids')
       .eq('league_id', leagueId);
-
-    if (error) {
-      console.error('[Rosters.loadAll]', error.message);
-      return;
-    }
-
+    if (error) { console.error('[Rosters.loadAll]', error.message); return; }
     (data || []).forEach(row => {
-      // Match this row's user_id to a manager integer ID
       let mgrId = null;
       if (row.user_id === DB.currentUser.id) {
         mgrId = 1;
@@ -9338,15 +9327,10 @@ const Rosters = {
         if (matched) mgrId = matched.id;
       }
       if (!mgrId) return;
-
       const ids = [...(row.player_ids || []), ...(row.bench_ids || [])];
       DB.rosters[mgrId] = ids;
-
-      // Stamp ownership on player objects
       const idSet = new Set(ids);
-      DB.players.forEach(p => {
-        if (idSet.has(p.id)) { p.drafted = true; p.owner = mgrId; }
-      });
+      DB.players.forEach(p => { if (idSet.has(p.id)) { p.drafted = true; p.owner = mgrId; } });
     });
     console.log('[Rosters.loadAll] managers with rosters:', Object.keys(DB.rosters));
   },
@@ -9377,6 +9361,34 @@ const Rosters = {
     const lgId = Rosters._activeLeagueId();
     if (!uid || !lgId) return;
     await Rosters.save(uid, lgId, DB.myTeam.players, DB.myTeam.bench);
+  },
+
+  // Save ALL managers' rosters to Supabase after draft completes.
+  // Uses State.draftPicks[mgrId] for each manager.
+  async saveAll(leagueId) {
+    if (!leagueId || !_supabase) return;
+    const starterCount = DB.settings.league.startersCount || 11;
+    for (const mgr of DB.managers) {
+      if (!mgr.userId) continue; // skip slots with no real user
+      const picks  = (State.draftPicks[mgr.id] || []).filter(Boolean);
+      if (picks.length === 0) continue;
+      const starters = picks.slice(0, starterCount);
+      const bench    = picks.slice(starterCount);
+      const { error } = await _supabase
+        .from('roster_slots')
+        .upsert({
+          user_id:    mgr.userId,
+          league_id:  leagueId,
+          player_ids: starters,
+          bench_ids:  bench,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,league_id' });
+      if (error) {
+        console.error('[Rosters.saveAll] error for', mgr.name, error.message);
+      } else {
+        console.log('[Rosters.saveAll] saved', picks.length, 'picks for', mgr.name);
+      }
+    }
   },
 
   // Derive the active league's UUID from State.myLeagues.
@@ -9524,11 +9536,7 @@ const Auth = {
     }
 
     // ── Diagnostic logs — open DevTools Console to debug ──────────
-
-    // Load all managers' rosters so Trade Center can show everyone's players
-    if (active && active.id) {
-      Rosters.loadAll(active.id);
-    }
+    if (active && active.id) { Rosters.loadAll(active.id); }
   },
 
   setMode(mode) {
