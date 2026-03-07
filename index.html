@@ -7287,7 +7287,7 @@ const Trades = {
     const askNames   = t.asking.map(id => DB.players.find(p => p.id === id)?.name?.split(' ').pop()).join(', ');
     const isActive = this.selectedTradeId === t.id;
     return `
-    <div class="trade-list-item ${isActive?'active':''}" onclick="Trades.selectTrade(${t.id})">
+    <div class="trade-list-item ${isActive?'active':''}" onclick="Trades.selectTrade('${t.id}')">
       <div class="tli-header">
         <div class="trade-status-dot ${t.status}"></div>
         <div class="avatar-ring" style="width:24px;height:24px;background:${other.bg};border-color:${other.color};color:${other.color};font-size:10px;flex-shrink:0">${other.name[0]}</div>
@@ -7401,12 +7401,12 @@ const Trades = {
       <!-- Actions -->
       <div class="trade-actions">
         ${canRespond ? `
-          <button class="btn btn-primary" onclick="Trades.accept(${t.id})" style="gap:8px">✅ Accept Trade</button>
-          <button class="btn btn-danger"  onclick="Trades.reject(${t.id})" style="gap:8px">❌ Decline</button>
-          <button class="btn btn-secondary" onclick="Trades.openCounter(${t.id})" style="gap:8px">🔄 Counter Offer</button>
+          <button class="btn btn-primary" onclick="Trades.accept('${t.id}')" style="gap:8px">✅ Accept Trade</button>
+          <button class="btn btn-danger"  onclick="Trades.reject('${t.id}')" style="gap:8px">❌ Decline</button>
+          <button class="btn btn-secondary" onclick="Trades.openCounter('${t.id}')" style="gap:8px">🔄 Counter Offer</button>
         ` : ''}
         ${canCancel ? `
-          <button class="btn btn-danger" onclick="Trades.cancel(${t.id})">🗑 Cancel Trade</button>
+          <button class="btn btn-danger" onclick="Trades.cancel('${t.id}')">🗑 Cancel Trade</button>
           <span style="font-size:12px;color:var(--text-3);display:flex;align-items:center">Awaiting ${other.name}'s response...</span>
         ` : ''}
         ${!isPending ? `<span style="font-size:13px;color:var(--text-2)">This trade has been ${t.status}.</span>` : ''}
@@ -7607,7 +7607,7 @@ const Trades = {
     // Update active state in list
     document.querySelectorAll('.trade-list-item').forEach(el => {
       el.classList.remove('active');
-      if (el.getAttribute('onclick')?.includes(`selectTrade(${id})`)) el.classList.add('active');
+      if (el.getAttribute('onclick')?.includes(id)) el.classList.add('active');
     });
   },
 
