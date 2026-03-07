@@ -9730,22 +9730,26 @@ const WaiverDB = {
   async saveAll() {
     const leagueId = this._leagueId();
     const memberId = this._memberId();
-    if (!leagueId || !memberId || !_supabase) return;
-    // Delete all existing claims for this member, then re-insert in order
-    await _supabase.from('waiver_claims').delete()
+    console.log('[WaiverDB.saveAll] leagueId:', leagueId, 'memberId:', memberId, 'claims:', State.waiverClaims?.length);
+    if (!leagueId || !memberId || !_supabase) {
+      console.warn('[WaiverDB.saveAll] aborted — missing leagueId or memberId');
+      return;
+    }
+    // Delete all existing claims for this member first
+    const { error: delError } = await _supabase.from('waiver_claims').delete()
       .eq('league_id', leagueId).eq('member_id', memberId);
-    const rows = State.waiverClaims.map((c, i) => ({
+    if (delError) { console.error('[WaiverDB.saveAll] delete error:', delError.message); return; }
+    const rows = (State.waiverClaims || []).map((c, i) => ({
       league_id:      leagueId,
       member_id:      memberId,
-      add_player_id:  c.addId,
-      drop_player_id: c.dropId || null,
+      add_player_id:  String(c.addId),
+      drop_player_id: c.dropId ? String(c.dropId) : null,
       mode:           c.mode || 'add-only',
       priority:       i,
     }));
-    if (!rows.length) return;
+    if (!rows.length) { console.log('[WaiverDB.saveAll] no claims to save'); return; }
     const { data, error } = await _supabase.from('waiver_claims').insert(rows).select();
-    if (error) { console.error('[WaiverDB.saveAll]', error.message); return; }
-    // Update local _supabaseIds
+    if (error) { console.error('[WaiverDB.saveAll] insert error:', error.message); return; }
     (data || []).forEach((row, i) => { if (State.waiverClaims[i]) State.waiverClaims[i]._supabaseId = row.id; });
     console.log('[WaiverDB.saveAll] saved', rows.length, 'claims');
   },
