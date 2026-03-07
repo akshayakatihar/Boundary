@@ -9579,7 +9579,10 @@ const Auth = {
     // Listen for auth state changes (login, logout, token refresh)
     _supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        // Skip if already loaded via getSession() above — avoids double init on refresh
+        if (DB.currentUser && DB.currentUser.id) return;
         await this._loadUserIntoState(session.user);
+        await this.enterApp(false);
       }
       if (event === 'SIGNED_OUT') {
         DB.currentUser = {};
