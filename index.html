@@ -3632,9 +3632,13 @@ const Screens = {
             ${min > 0 && val < min ? `<div style="font-size:9px;color:var(--red);margin-top:2px">Need ${min-val} more</div>` : ''}
           </div>`).join('')}
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:13px;font-weight:700">${pickedTotal}/${rounds} picked</div>
         ${bowArCount < 5 ? `<span class="pill pill-red" style="font-size:10px">BOW+AR: ${bowArCount}/5</span>` : `<span class="pill pill-green" style="font-size:10px">BOW+AR ✓</span>`}
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+        ${counts.WK >= 1 ? `<span class="pill pill-green" style="font-size:10px">🧤 WK ✓</span>` : `<span class="pill pill-red" style="font-size:10px">🧤 Need WK</span>`}
+        ${counts.BAT >= 2 ? `<span class="pill pill-green" style="font-size:10px">🏏 BAT ✓</span>` : `<span class="pill pill-red" style="font-size:10px">🏏 BAT: ${counts.BAT}/2</span>`}
       </div>
       ${bowArEmptyRows}
       ${squadSections.join('')}`;
@@ -3972,13 +3976,6 @@ const Screens = {
     if (wkCount < 1)    illegalReasons.push('at least 1 Wicket-Keeper required');
     if (bowArCount < 5) illegalReasons.push(`at least 5 Bowlers/All-Rounders required (you have ${bowArCount})`);
 
-    const sections = [
-      { key: 'WK',  label: 'Wicket-Keepers', icon: '🧤' },
-      { key: 'BAT', label: 'Batsmen',         icon: '🏏' },
-      { key: 'AR',  label: 'All-Rounders',    icon: '⚡' },
-      { key: 'BOW', label: 'Bowlers',         icon: '🏐' },
-    ];
-
     // Countdown: minutes until next GW lock (mock: 2h 47m from now)
     const minutesLeft = 167;
     const hours = Math.floor(minutesLeft / 60);
@@ -4015,6 +4012,7 @@ const Screens = {
           <div class="slot-name">${p.name}</div>
           <div class="slot-meta">
             <span class="slot-team-badge">${p.team}</span>
+            <span class="pill ${ROLE_COLORS[p.role]}" style="font-size:10px;padding:1px 6px">${ROLES[p.role].label}</span>
           </div>
         </div>
         ${swapBtn}
@@ -4043,8 +4041,8 @@ const Screens = {
       <div class="player-slot bench-slot empty-bench-slot${targetClass}" onclick="${isTarget ? `MyTeam.moveToEmptyBench(${slotIndex})` : ''}">
         <div class="slot-role-icon" style="background:var(--bg-3);color:var(--text-3);font-size:16px">🪑</div>
         <div class="slot-info">
-          <div class="slot-name" style="color:var(--text-3)">Placeholder</div>
-          <div class="slot-meta"><span style="font-size:11px;color:var(--text-3)">${isTarget ? 'Click ⇄ to move here' : 'Swap a starter here to bench them'}</span></div>
+          <div class="slot-name" style="color:var(--text-3)">Empty slot</div>
+          <div class="slot-meta"><span style="font-size:11px;color:var(--text-3)">${isTarget ? 'Click ⇄ to bench this player' : 'Swap a starter here to bench them'}</span></div>
         </div>
         ${swapBtn}
         <div class="slot-pts-pair" style="opacity:0.25">
@@ -4055,31 +4053,10 @@ const Screens = {
       </div>`;
     };
 
-    // Role minimums for empty slot placeholders
-    const ROLE_MIN = { WK: 1, BAT: 2, AR: 0, BOW: 0 };
-    const sectionHTML = sections.map(sec => {
-      const players = myPlayerIds.map(getP).filter(p => p && p.role === sec.key);
-      const min = ROLE_MIN[sec.key] || 0;
-      const needed = Math.max(0, min - players.length);
-      // Always show section even if empty — so WK/BAT slots are always visible
-      const emptyPlaceholders = Array(needed).fill(0).map(() => `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px dashed rgba(239,68,68,0.4);border-radius:var(--radius-md);margin-bottom:6px;opacity:0.75">
-          <div style="font-size:18px">${sec.icon}</div>
-          <div style="flex:1;font-size:13px;color:var(--red)">Need 1 ${sec.label.replace(/s$/,'')}</div>
-          <span class="pill pill-red" style="font-size:9px">Required</span>
-        </div>`).join('');
-      if (!players.length && needed === 0) return ''; // AR/BOW with 0 picked and no minimum — hide
-      return `
-      <div style="margin-bottom:20px">
-        <div class="myteam-section-header">
-          <span class="myteam-section-icon">${sec.icon}</span>
-          <span class="myteam-section-title">${sec.label}</span>
-          <span class="myteam-section-count">${players.length}</span>
-        </div>
-        ${players.map(p => renderSlot(p, false)).join('')}
-        ${emptyPlaceholders}
-      </div>`;
-    }).join('');
+    // Flat Starting XI — all players in a single list, sorted by role for readability
+    const ROLE_ORDER = { WK: 0, BAT: 1, AR: 2, BOW: 3 };
+    const startingXI = [...startingPlayers].sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
+    const startingXIHTML = startingXI.map(p => renderSlot(p, false)).join('');
 
     const benchHTML = [
       ...benchIds.map(id => renderSlot(getP(id), true)),
@@ -4101,7 +4078,11 @@ const Screens = {
           <div class="ban-title">Illegal Lineup</div>
           <div class="ban-sub">${illegalReasons.join(' · ')}</div>
         </div>
-      </div>` : ''}
+      </div>` : `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:var(--radius-md)">
+        <span style="font-size:16px">✅</span>
+        <div style="font-size:13px;font-weight:600;color:var(--green)">Valid lineup · Ready for Gameweek 7</div>
+      </div>`}
 
       <!-- Team Header -->
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
@@ -4148,11 +4129,11 @@ const Screens = {
 
       <!-- Starting XI -->
       <div class="myteam-section-wrap">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-          <div style="font-family:var(--font-display);font-size:16px;font-weight:800">Starting XI</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="font-family:var(--font-display);font-size:16px;font-weight:800">Starting XI <span style="font-size:13px;font-weight:500;color:var(--text-3)">${startingXI.length} players</span></div>
           <span class="pill ${isIllegal ? 'pill-red' : 'pill-green'}" style="font-size:11px">${isIllegal ? '⚠️ Illegal Lineup' : '✓ Valid Lineup'}</span>
         </div>
-        ${sectionHTML}
+        ${startingXIHTML}
       </div>
 
       <!-- Bench -->
