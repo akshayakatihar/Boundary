@@ -2689,7 +2689,6 @@ const App = {
   async loadPlayers() {
     const players = await PlayersDB.fetchAll();
     if (players && players.length > 0) {
-      console.log('[loadPlayers] DB.myTeam.players at load time:', DB.myTeam.players.slice(0,3));
       DB.players = players;
       const myIds = new Set([...DB.myTeam.players, ...DB.myTeam.bench]);
       if (myIds.size > 0) {
@@ -2701,8 +2700,12 @@ const App = {
         const idSet = new Set(ids);
         DB.players.forEach(p => { if (idSet.has(p.id)) { p.drafted = true; p.owner = mid; } });
       });
-      const screen = location.hash.replace('#','') || 'home';
-      if (['players','waiver','draft','trades'].includes(screen)) { this.route(); }
+      // Only re-route if already in the app (not on initial load where enterApp handles render)
+      if (document.getElementById('app-shell')?.style.display !== 'none' &&
+          document.getElementById('app-shell')?.style.display !== '') {
+        const screen = location.hash.replace('#','') || 'home';
+        if (['players','waiver','draft','trades'].includes(screen)) { this.route(); }
+      }
     }
   },
 
@@ -9676,11 +9679,10 @@ const Auth = {
       }
     }
 
-    // ── Load all rosters + trades, then re-render so My Team is populated on first load ──
+    // ── Load all rosters + trades ──
     if (active && active.id) {
       await Rosters.loadAll(active.id);
       await TradesDB.load(active.id);
-      App.render(); // re-render after async data is ready
     }
     this._loadingState = false;
   },
@@ -9910,10 +9912,11 @@ const Auth = {
     const appEl  = document.getElementById('app-shell');
     if (authEl) { authEl.style.opacity = '0'; authEl.style.transition = 'opacity 0.4s ease'; setTimeout(() => { authEl.style.display = 'none'; }, 400); }
     if (appEl)  { appEl.style.display = 'flex'; setTimeout(() => { appEl.style.opacity = '1'; }, 10); }
-    // Data already loaded by caller before enterApp — just init and render
-    App.init(); // first render — may show partial state (e.g. no managers yet if timing was off)
-    App.initDraft(); // re-run with fully hydrated DB.managers
-    App.render(); // second render — always reflects fully hydrated DB.managers
+    // Data already loaded by caller before enterApp — load players then render
+    await App.loadPlayers(); // fetch players first so My Team renders with full data
+    App.init(); // sets up nav, routes, etc.
+    App.initDraft();
+    App.render(); // single render with all data ready
     // Subscribe to real-time draft events (session start + live picks)
     const activeLg = State.myLeagues[State.activeLeagueIndex];
     if (activeLg) DraftRealtime.subscribe(activeLg.id);
