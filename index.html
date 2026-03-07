@@ -7917,8 +7917,11 @@ const Trades = {
     const msg = msgEl ? msgEl.value.trim() : (State.tradeMsgDraft || '');
     State.tradeMsgDraft = '';
     const targetMgr = DB.managers.find(m => m.id === State.tradeTargetManager);
+    // Use a temp UUID so the onclick handler works immediately;
+    // replaced with the real Supabase UUID once insert resolves
+    const tempId = 'tmp-' + Date.now();
     const newTrade = {
-      id: DB.trades.length + 1,
+      id: tempId,
       from: 1,
       to: State.tradeTargetManager,
       status: 'pending',
@@ -7929,7 +7932,7 @@ const Trades = {
     };
     DB.trades.push(newTrade);
 
-    // Save to Supabase
+    // Save to Supabase — once resolved, promote Supabase UUID as the canonical id
     const activeLeague = State.myLeagues[State.activeLeagueIndex];
     if (activeLeague) {
       const fromMgr = DB.managers.find(m => m.id === 1);
@@ -7938,7 +7941,17 @@ const Trades = {
         TradesDB.insert(
           activeLeague.id, fromMgr.memberId, toMgr.memberId,
           [...State.tradeMyOffer], [...State.tradeTheirOffer], msg
-        ).then(row => { if (row) newTrade._supabaseId = row.id; });
+        ).then(row => {
+          if (row) {
+            newTrade.id = row.id;           // replace temp id with real UUID
+            newTrade._supabaseId = row.id;
+            // If this trade is currently selected, refresh the detail panel
+            if (Trades.selectedTradeId === tempId) {
+              Trades.selectedTradeId = row.id;
+              App.render();
+            }
+          }
+        });
       }
     }
 
@@ -7959,6 +7972,7 @@ const Trades = {
     State.tradeMyOffer = [];
     State.tradeTheirOffer = [];
     State.tradeTab = 'sent';
+    Trades.selectedTradeId = newTrade.id; // auto-select so detail is visible immediately
     App.toast(`📤 Trade offer sent to ${targetMgr?.name}!`);
     App.render();
   },
