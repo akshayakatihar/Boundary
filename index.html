@@ -7412,15 +7412,7 @@ const Trades = {
         ${!isPending ? `<span style="font-size:13px;color:var(--text-2)">This trade has been ${t.status}.</span>` : ''}
       </div>
 
-      <!-- Counter offer section (hidden by default) -->
-      <div id="counter-area" style="display:none">
-        <div class="trade-counter-area">
-          <div class="counter-label">🔄 Counter Offer — Modify the terms</div>
-          <p style="font-size:12px;color:var(--text-2);margin-bottom:12px">Adjust the players being exchanged and send a counter proposal to ${other.name}.</p>
-          <button class="btn btn-secondary" style="font-size:12px" onclick="Trades.submitCounter(${t.id})">Send Counter Offer</button>
-          <button class="btn btn-ghost" style="font-size:12px;margin-left:8px" onclick="document.getElementById('counter-area').style.display='none'">Cancel</button>
-        </div>
-      </div>
+
     </div>`;
   },
 
@@ -7745,6 +7737,16 @@ const Trades = {
     }
 
     // Add notification
+    // If this was a counter offer, reject the original trade
+    if (State._counteringTradeId) {
+      const orig = DB.trades.find(tr => tr.id === State._counteringTradeId);
+      if (orig) {
+        orig.status = 'rejected';
+        if (orig._supabaseId) TradesDB.updateStatus(orig._supabaseId, 'rejected');
+      }
+      State._counteringTradeId = null;
+    }
+
     State.tradeStep = 1;
     State.tradeProposing = false;
     State.tradeTargetManager = null;
@@ -7809,8 +7811,18 @@ const Trades = {
   },
 
   openCounter(tradeId) {
-    const area = document.getElementById('counter-area');
-    if (area) area.style.display = area.style.display === 'none' ? 'block' : 'none';
+    const t = DB.trades.find(tr => tr.id === tradeId);
+    if (!t) return;
+    // Launch the trade wizard pre-filled with the flipped terms of this trade.
+    // The counter offer goes back to whoever sent the original.
+    State.tradeStep = 2;
+    State.tradeProposing = true;
+    State.tradeTargetManager = t.from;        // reply to the original sender
+    State.tradeMyOffer   = [...t.asking];     // what they wanted becomes what we offer
+    State.tradeTheirOffer = [...t.offer];     // what they offered becomes what we want back
+    // Mark original as rejected when counter is submitted
+    State._counteringTradeId = tradeId;
+    App.render();
   },
 
   submitCounter(tradeId) {
