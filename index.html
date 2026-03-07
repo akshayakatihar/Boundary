@@ -9803,6 +9803,7 @@ const Auth = {
         State.hasLeague = false;
         State.myLeagues = [];
         this.setLoading(false);
+        await this._loadUserIntoState(data.user);
         await this.enterApp(true);
 
       } else {
@@ -9813,6 +9814,7 @@ const Auth = {
         // if the row is already there; ensures OAuth users get one on first email login too).
         await Profiles.upsert(data.user);
         this.setLoading(false);
+        await this._loadUserIntoState(data.user);
         await this.enterApp(false);
       }
 
@@ -9903,8 +9905,7 @@ const Auth = {
     const appEl  = document.getElementById('app-shell');
     if (authEl) { authEl.style.opacity = '0'; authEl.style.transition = 'opacity 0.4s ease'; setTimeout(() => { authEl.style.display = 'none'; }, 400); }
     if (appEl)  { appEl.style.display = 'flex'; setTimeout(() => { appEl.style.opacity = '1'; }, 10); }
-    // Load all user + league data (includes hydrateManagers, settings, draft state)
-    await this._loadUserIntoState(await _supabase.auth.getUser().then(r => r.data.user));
+    // Data already loaded by caller before enterApp — just init and render
     App.init(); // first render — may show partial state (e.g. no managers yet if timing was off)
     App.initDraft(); // re-run with fully hydrated DB.managers
     App.render(); // second render — always reflects fully hydrated DB.managers
