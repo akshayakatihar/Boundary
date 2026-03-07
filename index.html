@@ -7126,6 +7126,97 @@ const Waiver = {
 
 }
 
+// ============================================================
+// TRADESDB — read/write the `trades` Supabase table
+// ============================================================
+// Run this SQL once in Supabase SQL Editor to create the table:
+//
+//   create table trades (
+//     id               uuid primary key default gen_random_uuid(),
+//     league_id        uuid references leagues(id) on delete cascade,
+//     from_member_id   uuid references league_members(id),
+//     to_member_id     uuid references league_members(id),
+//     offer_player_ids text[] not null default '{}',
+//     ask_player_ids   text[] not null default '{}',
+//     message          text,
+//     status           text not null default 'pending',
+//     created_at       timestamptz default now(),
+//     updated_at       timestamptz default now()
+//   );
+//   alter table trades enable row level security;
+//   create policy "members can read" on trades for select using (
+//     exists (select 1 from league_members lm where lm.league_id = trades.league_id and lm.user_id = auth.uid())
+//   );
+//   create policy "members can insert" on trades for insert with check (
+//     exists (select 1 from league_members lm where lm.league_id = trades.league_id and lm.user_id = auth.uid())
+//   );
+//   create policy "members can update" on trades for update using (
+//     exists (select 1 from league_members lm where lm.league_id = trades.league_id and lm.user_id = auth.uid())
+//   );
+// ============================================================
+const TradesDB = {
+
+  // Load all trades for the active league into DB.trades
+  async load(leagueId) {
+    if (!leagueId || !_supabase) return;
+    const { data, error } = await _supabase
+      .from('trades')
+      .select('*')
+      .eq('league_id', leagueId)
+      .order('created_at', { ascending: false });
+    if (error) { console.error('[TradesDB.load]', error.message); return; }
+    DB.trades = (data || []).map(row => {
+      const fromMgr = DB.managers.find(m => m.memberId === row.from_member_id);
+      const toMgr   = DB.managers.find(m => m.memberId === row.to_member_id);
+      return {
+        id:          row.id,
+        from:        fromMgr ? fromMgr.id : null,
+        to:          toMgr   ? toMgr.id   : null,
+        offer:       row.offer_player_ids || [],
+        asking:      row.ask_player_ids   || [],
+        message:     row.message          || '',
+        status:      row.status,
+        created:     new Date(row.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        _supabaseId: row.id,
+      };
+    }).filter(t => t.from !== null && t.to !== null);
+    console.log('[TradesDB.load] loaded', DB.trades.length, 'trades');
+  },
+
+  // Save a new trade to Supabase
+  async insert(leagueId, fromMemberId, toMemberId, offerIds, askIds, message) {
+    if (!leagueId || !_supabase) return null;
+    const { data, error } = await _supabase
+      .from('trades')
+      .insert({
+        league_id:        leagueId,
+        from_member_id:   fromMemberId,
+        to_member_id:     toMemberId,
+        offer_player_ids: offerIds,
+        ask_player_ids:   askIds,
+        message:          message || null,
+        status:           'pending',
+        updated_at:       new Date().toISOString(),
+      })
+      .select()
+      .single();
+    if (error) { console.error('[TradesDB.insert]', error.message); return null; }
+    console.log('[TradesDB.insert] saved trade', data.id);
+    return data;
+  },
+
+  // Update a trade's status
+  async updateStatus(supabaseId, status) {
+    if (!supabaseId || !_supabase) return;
+    const { error } = await _supabase
+      .from('trades')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', supabaseId);
+    if (error) console.error('[TradesDB.updateStatus]', error.message);
+    else console.log('[TradesDB.updateStatus]', supabaseId, '->', status);
+  },
+};
+
 const Trades = {
   selectedTradeId: null,
 
@@ -7640,6 +7731,19 @@ const Trades = {
     };
     DB.trades.push(newTrade);
 
+    // Save to Supabase
+    const activeLeague = State.myLeagues[State.activeLeagueIndex];
+    if (activeLeague) {
+      const fromMgr = DB.managers.find(m => m.id === 1);
+      const toMgr   = DB.managers.find(m => m.id === State.tradeTargetManager);
+      if (fromMgr?.memberId && toMgr?.memberId) {
+        TradesDB.insert(
+          activeLeague.id, fromMgr.memberId, toMgr.memberId,
+          [...State.tradeMyOffer], [...State.tradeTheirOffer], msg
+        ).then(row => { if (row) newTrade._supabaseId = row.id; });
+      }
+    }
+
     // Add notification
     State.tradeStep = 1;
     State.tradeProposing = false;
@@ -7655,6 +7759,7 @@ const Trades = {
     const t = DB.trades.find(tr => tr.id === tradeId);
     if (!t) return;
     t.status = 'accepted';
+    if (t._supabaseId) TradesDB.updateStatus(t._supabaseId, 'accepted');
 
     // Swap player ownerships in DB.players
     t.offer.forEach(id => {
@@ -7686,6 +7791,7 @@ const Trades = {
     const t = DB.trades.find(tr => tr.id === tradeId);
     if (!t) return;
     t.status = 'rejected';
+    if (t._supabaseId) TradesDB.updateStatus(t._supabaseId, 'rejected');
     const other = DB.managers.find(m => m.id === t.from);
     this.selectedTradeId = tradeId;
     App.toast(`❌ Trade from ${other?.name} declined.`);
@@ -7696,6 +7802,7 @@ const Trades = {
     const t = DB.trades.find(tr => tr.id === tradeId);
     if (!t) return;
     t.status = 'rejected';
+    if (t._supabaseId) TradesDB.updateStatus(t._supabaseId, 'cancelled');
     this.selectedTradeId = null;
     App.toast('🗑 Trade offer cancelled.');
     App.render();
@@ -9514,7 +9621,10 @@ const Auth = {
     }
 
     // ── Diagnostic logs — open DevTools Console to debug ──────────
-    if (active && active.id) { Rosters.loadAll(active.id); }
+    if (active && active.id) {
+      Rosters.loadAll(active.id);
+      TradesDB.load(active.id);
+    }
   },
 
   setMode(mode) {
