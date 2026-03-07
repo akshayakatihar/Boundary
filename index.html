@@ -9579,10 +9579,8 @@ const Auth = {
     // Listen for auth state changes (login, logout, token refresh)
     _supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        // Skip if already loaded via getSession() above — avoids double init on refresh
-        if (DB.currentUser && DB.currentUser.id) return;
+        // _loadUserIntoState guards against double-runs via _loadingState flag
         await this._loadUserIntoState(session.user);
-        await this.enterApp(false);
       }
       if (event === 'SIGNED_OUT') {
         DB.currentUser = {};
@@ -9595,6 +9593,8 @@ const Auth = {
   // Auth metadata is applied first as a baseline; the profiles row (if it exists)
   // then overrides with any richer / user-editable data.
   async _loadUserIntoState(user) {
+    if (this._loadingState) { console.log('[_loadUserIntoState] already running, skipping'); return; }
+    this._loadingState = true;
     const meta     = user.user_metadata || {};
     const fullName = meta.full_name || meta.name || user.email.split('@')[0];
 
@@ -9681,6 +9681,7 @@ const Auth = {
       await TradesDB.load(active.id);
       App.render(); // re-render after async data is ready
     }
+    this._loadingState = false;
   },
 
   setMode(mode) {
