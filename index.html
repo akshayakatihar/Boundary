@@ -2393,10 +2393,7 @@ a { text-decoration: none; color: inherit; }
       </div>
     </header>
     <div id="page">
-      <div id="app-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:16px">
-        <div style="font-size:36px;animation:spin 1s linear infinite">🏏</div>
-        <div style="font-size:14px;color:var(--text-3);font-weight:500">Loading your league…</div>
-      </div>
+      <div id="app-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:16px"><div style="font-size:36px">🏏</div><div style="font-size:14px;color:var(--text-3)">Loading your league…</div></div>
     </div>
   </main>
 
@@ -2980,20 +2977,16 @@ const App = {
   // "saved from url" marker and any ./index_files/ local path references
   // that Chrome injects when you use File > Save As.
   downloadCleanFile() {
-    let html = document.documentElement.outerHTML;
-    // Strip Chrome's "saved from url" mark-of-the-web comment
-    html = html.replace(/<!--\s*saved from url[^>]*-->/gi, '');
-    // Fix any ./index_files/ resource paths Chrome may have injected
-    html = html.replace(/["']\.\/index_files\/[^"']*["']/g, '""');
-    // Ensure clean DOCTYPE
-    const full = '<!DOCTYPE html>\n' + html;
-    const blob = new Blob([full], { type: 'text/html' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'index.html';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    this.toast('⬇️ Clean file downloaded!');
+    // ⚠️  DO NOT use this button to get the file for GitHub deployment.
+    // outerHTML captures the live DOM which Chrome mangles (strips script content,
+    // injects runtime state, etc.) — the resulting file will be broken.
+    //
+    // ✅ CORRECT WORKFLOW:
+    //   1. Ask Claude to make changes
+    //   2. Download the file from Claude's output panel (the presented file link)
+    //   3. Replace your GitHub repo's index.html with that file
+    //   4. Commit + push → GitHub Pages deploys
+    App.toast('⚠️ Use the file from Claude\'s output panel — not this button!', 'error');
   },
 
   showModal(type, data) {
@@ -5860,25 +5853,31 @@ const Draft = {
   },
 
   autoPick() {
+    // In a real live draft: only auto-pick when it is actually your turn.
+    if (State.draftSessionId && !Draft._isMyTurn()) return;
     const available = DB.players.filter(p => !State.drafted.some(id => String(id) === String(p.id)));
     if (!available.length) return;
-    const best    = available.reduce((a,b) => b.pts > a.pts ? b : a);
-    const round   = Math.floor(State.currentPick / DB.managers.length);
-    const pickerUUID = State.draftOrder[State.currentPick];
-    const mgr = State.draftSessionId
-      ? DB.managers.find(m => m.memberId === pickerUUID)
-      : DB.managers.find(m => m.id       === pickerUUID);
-    if (!mgr) { State.currentPick++; this.advancePick(); return; }
-    const mgrKey = mgr.id;
-    const pid    = String(best.id);
-    State.drafted.push(pid);
-    if (!State.draftPicks[mgrKey]) State.draftPicks[mgrKey] = [];
-    State.draftPicks[mgrKey][round] = pid;
-    State.currentPick++;
-    best.drafted = true;
-    best.owner   = mgrKey;
-    App.toast('⚡ ' + mgr.name + ' auto-picked ' + best.name);
-    this.advancePick();
+    const best  = available.reduce((a,b) => b.pts > a.pts ? b : a);
+    const round = Math.floor(State.currentPick / DB.managers.length);
+    if (State.draftSessionId) {
+      // Real draft: use pick() so the pick is persisted + synced to other users
+      this.pick(String(best.id));
+    } else {
+      // Mock draft: apply locally for the bot manager
+      const pickerUUID = State.draftOrder[State.currentPick];
+      const mgr = DB.managers.find(m => m.id === pickerUUID);
+      const mgrKey = mgr ? mgr.id : (State.currentPick % DB.managers.length) + 1;
+      const pid = String(best.id);
+      State.drafted.push(pid);
+      if (!State.draftPicks[mgrKey]) State.draftPicks[mgrKey] = [];
+      State.draftPicks[mgrKey][round] = pid;
+      State.currentPick++;
+      best.drafted = true;
+      best.owner   = mgrKey;
+      const m2 = DB.managers.find(m => m.id === mgrKey);
+      App.toast('⚡ ' + (m2 ? m2.name : 'Bot') + ' auto-picked ' + best.name);
+      this.advancePick();
+    }
   },
 
   advancePick() {
@@ -5911,7 +5910,7 @@ const Draft = {
         State.draftTab = 'queue';
       }
       this.updateDraftDOM();
-      if (!Draft._isMyTurn()) {
+      if (!State.draftSessionId && !Draft._isMyTurn()) {
         setTimeout(() => this.autoPick(), 1500 + Math.random()*1000);
       }
     }, 200);
@@ -9481,7 +9480,6 @@ const DraftDB = {
         player_id:        playerId,
         round:            round,
         pick_number:      pickNumber,
-        picked_by:        DB.currentUser?.id || null,
         picked_at:        new Date().toISOString(),
       });
     if (error) { console.error('[DraftDB.savePick]', error.message); }
@@ -10014,14 +10012,10 @@ const DraftRealtime = {
         if (!row) return;
 
         if (row.status === 'active') {
-          // Always re-subscribe picks channel with the real session ID.
-          // This runs for BOTH users: User2 (who was waiting) and the commissioner
-          // (whose subscribe() at login had a null session ID = wrong filter).
           State.draftSessionId = row.id;
           State.draftPickOrder = row.pick_order || State.draftPickOrder;
           DraftRealtime.resubscribePicks(row.id);
           if (State.draftPhase !== 'live') {
-            // Draft just started — restore full session state then navigate
             App.toast('🏏 Draft is starting!');
             await DraftDB.restoreForLeague(leagueId);
             State.draftPhase = 'live';
@@ -10037,12 +10031,8 @@ const DraftRealtime = {
       })
       .subscribe();
 
-    // ── 2. Watch draft_picks — only subscribe once we have a real session ID.
-    //    Both users get resubscribePicks() called via the session channel handler above.
-    //    The commissioner also gets it called in startDraft() directly.
-    if (State.draftSessionId) {
-      this.resubscribePicks(State.draftSessionId);
-    }
+    // ── 2. Watch draft_picks deferred — resubscribePicks() is called once session ID is known.
+    if (State.draftSessionId) { this.resubscribePicks(State.draftSessionId); }
   },
 
   // Re-subscribe picks channel once we have a real session ID
@@ -10063,14 +10053,9 @@ const DraftRealtime = {
       .subscribe();
   },
 
-  // Shared handler: apply a pick received via Realtime to local state + re-render.
-  // Skips picks made by the current user (already applied locally on submit).
   _applyIncomingPick(pick) {
-    if (!pick) return;
-    // Skip our own picks — we already applied them in Draft.pick() / Draft.autoPick()
-    if (pick.picked_by && pick.picked_by === DB.currentUser?.id) return;
-    // Skip if already in State.drafted (prevents double-apply on reconnect)
-    if (State.drafted.includes(pick.player_id)) return;
+    if (!pick || !pick.player_id) return;
+    if (State.drafted.includes(pick.player_id)) return; // already applied locally
     const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
     if (!mgr) return;
     const mgrId = mgr.id;
