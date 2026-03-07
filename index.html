@@ -2853,7 +2853,14 @@ const App = {
       // Re-run initDraft whenever the draft screen renders so State.draftOrder is always fresh
       if (State.page === 'draft') { App.initDraft(); }
       el.innerHTML = (screens[State.page] || Screens.home)();
-      if (State.page === 'draft' && State.draftPhase === 'live') { Draft.initTimer(); Draft.updateLineupTracker(); }
+      if (State.page === 'draft' && State.draftPhase === 'live') {
+        Draft.initTimer();
+        Draft.updateLineupTracker();
+        // Re-apply role filter after every full render so it persists across picks
+        if ((State.draftTab || 'queue') === 'queue') {
+          requestAnimationFrame(() => Draft.applyQueueFilter());
+        }
+      }
       if (State.page === 'scoring') Matchup.renderPage && void 0; // rendered by Screens.scoring()
       if (State.page === 'players') Players.init();
       if (State.page === 'waiver')  Waiver.init();
@@ -7882,7 +7889,9 @@ const Commissioner = {
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3)">${label}</div>
       </div>
       <div style="display:flex;align-items:center;justify-content:flex-end">
-        ${isComm ? editContent : `<span style="font-size:12px;color:var(--text-3)">—</span>`}
+        ${isComm
+          ? editContent
+          : `<span style="font-size:13px;color:var(--text-1);font-weight:500">${value ?? '—'}</span>`}
       </div>
     </div>`;
   },
@@ -9917,9 +9926,9 @@ const DraftRealtime = {
     const missed = data.filter(p => p.pick_number > State.currentPick || !State.drafted.includes(p.player_id));
     if (missed.length > 0) {
       console.log('[_pollMissedPicks] found', missed.length, 'unapplied picks, replaying...');
-      // Re-run full applyPicksToState to reconcile
+      // Re-run full applyPicksToState to reconcile state, then advance turn
       DraftDB.applyPicksToState(data, null);
-      App.render();
+      Draft.advancePick();
     }
   },
 
@@ -9945,8 +9954,9 @@ const DraftRealtime = {
     // Set currentPick to the authoritative pick_number from DB (not just +1)
     State.currentPick = Math.max(State.currentPick, pickNumber);
     console.log('[_applyIncomingPick] applied pick', pickNumber, 'by mgr', mgrId, '| new currentPick:', State.currentPick);
-    Draft.resetTimer();
-    App.render();
+    // Use advancePick() instead of App.render() — it handles tab switching,
+    // timer reset, and calls updateDraftDOM() surgically without a full re-render.
+    Draft.advancePick();
   },
 
   unsubscribe() {
