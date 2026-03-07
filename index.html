@@ -3952,10 +3952,22 @@ const Screens = {
     const startingPlayers = myPlayerIds.map(getP).filter(Boolean);
     const wkCount    = startingPlayers.filter(p => p.role === 'WK').length;
     const bowArCount = startingPlayers.filter(p => p.role === 'BOW' || p.role === 'AR').length;
-    const isIllegal  = wkCount < 1 || bowArCount < 5;
+    const expectedStarters = DB.settings.league.startersCount || 11;
+    const expectedBench    = DB.settings.league.benchCount || 4;
+    const expectedSquad    = expectedStarters + expectedBench;
+    const totalInSquad     = myPlayerIds.length + benchIds.length;
     const illegalReasons = [];
     if (wkCount < 1)    illegalReasons.push('at least 1 Wicket-Keeper required');
     if (bowArCount < 5) illegalReasons.push(`at least 5 Bowlers/All-Rounders required (you have ${bowArCount})`);
+    if (myPlayerIds.length !== expectedStarters && myPlayerIds.length > 0)
+      illegalReasons.push(`Starting XI must have exactly ${expectedStarters} players (you have ${myPlayerIds.length})`);
+    const isIllegal = illegalReasons.length > 0;
+    // Squad size warnings (not illegal but shown separately)
+    const squadWarning = totalInSquad > expectedSquad
+      ? `⚠️ Too many players (${totalInSquad}/${expectedSquad}) — drop ${totalInSquad - expectedSquad} via Waiver Wire`
+      : totalInSquad < expectedSquad && totalInSquad > 0
+      ? `ℹ️ You have space for ${expectedSquad - totalInSquad} more player${expectedSquad - totalInSquad > 1 ? 's' : ''} — check the Waiver Wire`
+      : null;
 
     // Countdown: minutes until next GW lock (mock: 2h 47m from now)
     const minutesLeft = 167;
@@ -4040,6 +4052,10 @@ const Screens = {
         <span style="font-size:16px">✅</span>
         <div style="font-size:13px;font-weight:600;color:var(--green)">Valid lineup · Ready for Gameweek 7</div>
       </div>`}
+      ${squadWarning ? `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3);border-radius:var(--radius-md)">
+        <div style="font-size:13px;color:var(--gold)">${squadWarning}</div>
+      </div>` : ''}
 
       <!-- Team Header -->
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
@@ -5612,9 +5628,16 @@ const Draft = {
 
   autoPick() {
     if (State.draftSessionId && !Draft._isMyTurn()) return;
-    const available = DB.players.filter(p => !State.drafted.some(id => String(id) === String(p.id)));
-    if (!available.length) return;
-    const best  = available.reduce((a,b) => b.pts > a.pts ? b : a);
+    const allAvailable = DB.players.filter(p => !State.drafted.some(id => String(id) === String(p.id)));
+    if (!allAvailable.length) return;
+    // Respect forced roles — same logic as human picker
+    const forcedRoles = Draft._forcedRoles();
+    const available = forcedRoles.size > 0
+      ? allAvailable.filter(p => forcedRoles.has(p.role))
+      : allAvailable;
+    // Fallback to all available if forced filter yields nothing (shouldn't happen)
+    const pool = available.length > 0 ? available : allAvailable;
+    const best = pool.reduce((a,b) => b.pts > a.pts ? b : a);
     const round = Math.floor(State.currentPick / DB.managers.length);
     if (State.draftSessionId) {
       this.pick(String(best.id));
@@ -7400,7 +7423,7 @@ const Trades = {
       </div>
 
       <!-- Message -->
-      ${t.message ? `<div class="trade-message-box has-msg">💬 "${t.message}"</div>` : ''}
+      ${t.message && t.message.trim() ? `<div class="trade-message-box has-msg" style="padding:12px 24px;margin:0">💬 <em>${t.message}</em></div>` : ''}
 
       <!-- Actions -->
       <div class="trade-actions">
