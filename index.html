@@ -7823,23 +7823,29 @@ const Trades = {
     // Swap player ownerships in DB.players
     t.offer.forEach(id => {
       const p = DB.players.find(pl => pl.id === id);
-      if (p) p.owner = 1;
+      if (p) { p.owner = 1; p.drafted = true; }
     });
     t.asking.forEach(id => {
       const p = DB.players.find(pl => pl.id === id);
-      if (p) p.owner = t.from;
+      if (p) { p.owner = t.from; p.drafted = true; }
     });
 
-    // Sync DB.rosters for both managers
-    DB.rosters[1] = DB.players.filter(p => p.owner === 1).map(p => p.id);
-    DB.rosters[t.from] = DB.players.filter(p => p.owner === t.from).map(p => p.id);
+    // Sync DB.rosters by direct add/remove (safer than rebuilding from ownership)
+    if (!DB.rosters[1]) DB.rosters[1] = [];
+    if (!DB.rosters[t.from]) DB.rosters[t.from] = [];
+    // Remove asked-for from commissioner, add offered
+    DB.rosters[1] = DB.rosters[1].filter(id => !t.asking.includes(id));
+    t.offer.forEach(id => { if (!DB.rosters[1].includes(id)) DB.rosters[1].push(id); });
+    // Remove offered from other manager, add asked-for
+    DB.rosters[t.from] = DB.rosters[t.from].filter(id => !t.offer.includes(id));
+    t.asking.forEach(id => { if (!DB.rosters[t.from].includes(id)) DB.rosters[t.from].push(id); });
 
-    // Sync DB.myTeam.players — preserve order, swap out asked-for, add offered
-    DB.myTeam.players = DB.myTeam.players
-      .filter(id => !t.asking.includes(id))
-      .concat(t.offer.filter(id => !DB.myTeam.players.includes(id)));
-    DB.myTeam.bench = DB.myTeam.bench
-      .filter(id => !t.asking.includes(id));
+    console.log('[accept] roster sizes after swap — mgr1:', DB.rosters[1].length, 'mgr', t.from + ':', DB.rosters[t.from].length);
+
+    // Sync DB.myTeam to match DB.rosters[1]
+    const _sc = DB.settings.league.startersCount || 11;
+    DB.myTeam.players = DB.rosters[1].slice(0, _sc);
+    DB.myTeam.bench   = DB.rosters[1].slice(_sc);
 
     // Save both managers' updated rosters to Supabase
     const lg = State.myLeagues[State.activeLeagueIndex];
