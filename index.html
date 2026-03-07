@@ -9464,6 +9464,13 @@ const Rosters = {
       DB.rosters[mgrId] = ids;
       const idSet = new Set(ids);
       DB.players.forEach(p => { if (idSet.has(p.id)) { p.drafted = true; p.owner = mgrId; } });
+      // Always update DB.myTeam for the current user so trades persist after refresh
+      if (row.user_id === DB.currentUser.id) {
+        const sc = DB.settings.league.startersCount || 11;
+        DB.myTeam.players = (row.player_ids || []).slice(0, sc);
+        DB.myTeam.bench   = (row.bench_ids   || []);
+        console.log('[Rosters.loadAll] updated DB.myTeam:', DB.myTeam.players.length, 'starters');
+      }
     });
     console.log('[Rosters.loadAll] managers with rosters:', Object.keys(DB.rosters));
   },
