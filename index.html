@@ -9719,6 +9719,7 @@ const DraftDB = {
         player_id:        playerId,
         round:            round,
         pick_number:      pickNumber,
+        picked_by:        DB.currentUser?.id || null,
         picked_at:        new Date().toISOString(),
       });
     if (error) { console.error('[DraftDB.savePick]', error.message); }
@@ -10256,6 +10257,8 @@ const DraftRealtime = {
           State.draftSessionId = row.id;
           State.draftPickOrder = row.pick_order;
           await DraftDB.restoreForLeague(leagueId);
+          // Now we have a confirmed session ID — subscribe picks with the correct filter
+          DraftRealtime.resubscribePicks(row.id);
           Draft.setPhase('live');
           App.navigate('draft');
         }
@@ -10267,36 +10270,11 @@ const DraftRealtime = {
       })
       .subscribe();
 
-    // ── 2. Watch draft_picks for live pick updates ────────────
-    this._picksChannel = _supabase
-      .channel(`draft_picks_${leagueId}`)
-      .on('postgres_changes', {
-        event:  'INSERT',
-        schema: 'public',
-        table:  'draft_picks',
-        filter: `draft_session_id=eq.${State.draftSessionId || '00000000-0000-0000-0000-000000000000'}`,
-      }, async (payload) => {
-        const pick = payload.new;
-        if (!pick) return;
-        // Don't re-apply our own picks (already applied locally)
-        if (pick.picked_by === DB.currentUser.id) return;
-        // Apply the incoming pick to local state
-        const player = DB.players.find(p => p.id === pick.player_id);
-        if (player) {
-          player.drafted = true;
-          player.owner   = pick.league_member_id;
-        }
-        const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
-        if (mgr) {
-          if (!State.draftPicks[mgr.id]) State.draftPicks[mgr.id] = [];
-          State.draftPicks[mgr.id].push(pick.player_id);
-          State.drafted.push(pick.player_id);
-        }
-        State.currentPick++;
-        Draft.resetTimer();
-        App.render();
-      })
-      .subscribe();
+    // ── 2. Watch draft_picks — only if we already have a session ID.
+    //    If not, resubscribePicks() will be called when the session fires above.
+    if (State.draftSessionId) {
+      this.resubscribePicks(State.draftSessionId);
+    }
   },
 
   // Re-subscribe picks channel once we have a real session ID
@@ -10314,15 +10292,17 @@ const DraftRealtime = {
       }, async (payload) => {
         const pick = payload.new;
         if (!pick) return;
-        if (pick.picked_by === DB.currentUser.id) return;
-        const player = DB.players.find(p => p.id === pick.player_id);
-        if (player) { player.drafted = true; player.owner = pick.league_member_id; }
+        // Skip picks made by this user (already applied locally)
+        if (pick.picked_by && pick.picked_by === DB.currentUser?.id) return;
         const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
-        if (mgr) {
-          if (!State.draftPicks[mgr.id]) State.draftPicks[mgr.id] = [];
-          State.draftPicks[mgr.id].push(pick.player_id);
-          State.drafted.push(pick.player_id);
-        }
+        if (!mgr) return; // unknown manager, ignore
+        const mgrId  = mgr.id;
+        const round  = (pick.round || 1) - 1; // 0-based round index
+        const player = DB.players.find(p => p.id === pick.player_id);
+        if (player) { player.drafted = true; player.owner = mgrId; }
+        if (!State.draftPicks[mgrId]) State.draftPicks[mgrId] = [];
+        State.draftPicks[mgrId][round] = pick.player_id;
+        if (!State.drafted.includes(pick.player_id)) State.drafted.push(pick.player_id);
         State.currentPick++;
         Draft.resetTimer();
         App.render();
