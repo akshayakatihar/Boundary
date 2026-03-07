@@ -7112,141 +7112,6 @@ const Waiver = {
 
 }
 
-// ============================================================
-// TRADESDB — reads and writes the `trades` Supabase table
-// ============================================================
-// SQL to create the table (run once in Supabase SQL editor):
-//
-//   create table trades (
-//     id               uuid primary key default gen_random_uuid(),
-//     league_id        uuid references leagues(id) on delete cascade,
-//     from_member_id   uuid references league_members(id),
-//     to_member_id     uuid references league_members(id),
-//     offer_player_ids text[] not null default '{}',
-//     ask_player_ids   text[] not null default '{}',
-//     message          text,
-//     status           text not null default 'pending',
-//     created_at       timestamptz default now(),
-//     updated_at       timestamptz default now()
-//   );
-//
-//   -- Row-level security: any league member can see trades in their league
-//   alter table trades enable row level security;
-//   create policy "league members can read trades"
-//     on trades for select
-//     using (
-//       exists (
-//         select 1 from league_members lm
-//         where lm.league_id = trades.league_id
-//           and lm.user_id = auth.uid()
-//       )
-//     );
-//   create policy "league members can insert trades"
-//     on trades for insert
-//     with check (
-//       exists (
-//         select 1 from league_members lm
-//         where lm.league_id = trades.league_id
-//           and lm.user_id = auth.uid()
-//       )
-//     );
-//   create policy "trade parties can update status"
-//     on trades for update
-//     using (
-//       exists (
-//         select 1 from league_members lm
-//         where lm.league_id = trades.league_id
-//           and lm.user_id = auth.uid()
-//       )
-//     );
-// ============================================================
-const TradesDB = {
-
-  // Fetch all trades for the active league and populate DB.trades.
-  // Called once after sign-in.
-  async load(leagueId) {
-    if (!leagueId || !_supabase) return;
-
-    const { data, error } = await _supabase
-      .from('trades')
-      .select('*')
-      .eq('league_id', leagueId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('[TradesDB.load]', error.message);
-      return;
-    }
-
-    // Convert each Supabase row into the format the Trades UI expects.
-    // The UI uses integer manager IDs (1,2,3…) so we map member UUIDs → manager IDs.
-    const rows = data || [];
-    DB.trades = rows.map(row => {
-      const fromMgr = DB.managers.find(m => m.memberId === row.from_member_id);
-      const toMgr   = DB.managers.find(m => m.memberId === row.to_member_id);
-      return {
-        id:      row.id,          // UUID from Supabase (replaces the old integer id)
-        from:    fromMgr ? fromMgr.id : null,
-        to:      toMgr   ? toMgr.id   : null,
-        offer:   row.offer_player_ids  || [],
-        asking:  row.ask_player_ids    || [],
-        message: row.message           || '',
-        status:  row.status,
-        created: new Date(row.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-        _supabaseId: row.id,   // keep the UUID for updates
-      };
-    // Only show trades where we can resolve both managers
-    }).filter(t => t.from !== null && t.to !== null);
-
-    console.log('[TradesDB.load] loaded', DB.trades.length, 'trades');
-  },
-
-  // Save a new trade proposal to Supabase.
-  // Returns the new row (with its UUID id) or null on failure.
-  async insert(leagueId, fromMemberId, toMemberId, offerIds, askIds, message) {
-    if (!leagueId || !_supabase) return null;
-
-    const { data, error } = await _supabase
-      .from('trades')
-      .insert({
-        league_id:        leagueId,
-        from_member_id:   fromMemberId,
-        to_member_id:     toMemberId,
-        offer_player_ids: offerIds,
-        ask_player_ids:   askIds,
-        message:          message || null,
-        status:           'pending',
-        updated_at:       new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('[TradesDB.insert]', error.message);
-      return null;
-    }
-
-    console.log('[TradesDB.insert] saved trade', data.id);
-    return data;
-  },
-
-  // Update just the status field of an existing trade.
-  async updateStatus(supabaseId, status) {
-    if (!supabaseId || !_supabase) return;
-
-    const { error } = await _supabase
-      .from('trades')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', supabaseId);
-
-    if (error) {
-      console.error('[TradesDB.updateStatus]', error.message);
-    } else {
-      console.log('[TradesDB.updateStatus]', supabaseId, '→', status);
-    }
-  },
-};
-
 const Trades = {
   selectedTradeId: null,
 
@@ -7688,9 +7553,15 @@ const Trades = {
 
   openPicker(side) {
     const isMyRoster = side === 'mine';
-    const rosterIds = isMyRoster ? DB.myTeam.players : (DB.rosters[State.tradeTargetManager] || []);
+    const targetMgr  = DB.managers.find(m => m.id === State.tradeTargetManager);
+
+    // Use p.owner to find each manager's players — this works whether IDs are
+    // integers (mock data) or UUIDs (real Supabase draft), because owner is always
+    // set to the integer manager ID when a player is drafted.
+    const ownerId    = isMyRoster ? 1 : State.tradeTargetManager;
+    const rosterPlayers = DB.players.filter(p => p.owner === ownerId);
+
     const alreadyAdded = isMyRoster ? State.tradeMyOffer : State.tradeTheirOffer;
-    const targetMgr = DB.managers.find(m => m.id === State.tradeTargetManager);
 
     const overlay = document.createElement('div');
     overlay.className = 'player-picker-overlay';
@@ -7702,20 +7573,21 @@ const Trades = {
           <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="document.getElementById('player-picker').remove()">✕ Close</button>
         </div>
         <div class="player-picker-list">
-          ${rosterIds.map(id => {
-            const p = DB.players.find(pl => pl.id === id);
-            if (!p) return '';
-            const added = alreadyAdded.includes(id);
-            return `<div class="picker-player-row ${added ? 'already-added' : ''}" onclick="Trades.addPlayer(${id}, '${side}')">
-              <span style="font-size:18px">${ROLES[p.role].icon}</span>
-              <div style="flex:1">
-                <div style="font-size:13px;font-weight:600">${p.name}</div>
-                <div style="font-size:11px;color:var(--text-2)">${p.team} · ${ROLES[p.role].label}</div>
-              </div>
-              <div style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--green)">${p.pts}</div>
-              ${added ? '<span class="pill pill-green" style="font-size:10px">Added</span>' : '<button class="btn btn-primary" style="padding:5px 10px;font-size:11px">＋</button>'}
-            </div>`;
-          }).join('')}
+          ${rosterPlayers.length === 0
+            ? `<div style="padding:24px;text-align:center;color:var(--text-3);font-size:13px">No players found on this roster.</div>`
+            : rosterPlayers.map(p => {
+                const added = alreadyAdded.includes(p.id);
+                return `<div class="picker-player-row ${added ? 'already-added' : ''}" onclick="Trades.addPlayer(${p.id}, '${side}')">
+                  <span style="font-size:18px">${ROLES[p.role].icon}</span>
+                  <div style="flex:1">
+                    <div style="font-size:13px;font-weight:600">${p.name}</div>
+                    <div style="font-size:11px;color:var(--text-2)">${p.team} · ${ROLES[p.role].label}</div>
+                  </div>
+                  <div style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--green)">${p.pts}</div>
+                  ${added ? '<span class="pill pill-green" style="font-size:10px">Added</span>' : '<button class="btn btn-primary" style="padding:5px 10px;font-size:11px">＋</button>'}
+                </div>`;
+              }).join('')
+          }
         </div>
       </div>`;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -7757,26 +7629,6 @@ const Trades = {
     };
     DB.trades.push(newTrade);
 
-    // Save to Supabase (fire-and-forget — UI already updated in memory)
-    const activeLeague = State.myLeagues?.find(l => l.active);
-    if (activeLeague) {
-      const fromMgr = DB.managers.find(m => m.id === 1);
-      const toMgr   = DB.managers.find(m => m.id === State.tradeTargetManager);
-      if (fromMgr?.memberId && toMgr?.memberId) {
-        TradesDB.insert(
-          activeLeague.id,
-          fromMgr.memberId,
-          toMgr.memberId,
-          [...State.tradeMyOffer],
-          [...State.tradeTheirOffer],
-          msg
-        ).then(row => {
-          // Store the Supabase UUID on the local trade object so accept/reject/cancel can update it
-          if (row) newTrade._supabaseId = row.id;
-        });
-      }
-    }
-
     // Add notification
     State.tradeStep = 1;
     State.tradeProposing = false;
@@ -7792,7 +7644,6 @@ const Trades = {
     const t = DB.trades.find(tr => tr.id === tradeId);
     if (!t) return;
     t.status = 'accepted';
-    if (t._supabaseId) TradesDB.updateStatus(t._supabaseId, 'accepted');
 
     // Swap player ownerships in DB.players
     t.offer.forEach(id => {
@@ -7824,7 +7675,6 @@ const Trades = {
     const t = DB.trades.find(tr => tr.id === tradeId);
     if (!t) return;
     t.status = 'rejected';
-    if (t._supabaseId) TradesDB.updateStatus(t._supabaseId, 'rejected');
     const other = DB.managers.find(m => m.id === t.from);
     this.selectedTradeId = tradeId;
     App.toast(`❌ Trade from ${other?.name} declined.`);
@@ -7835,7 +7685,6 @@ const Trades = {
     const t = DB.trades.find(tr => tr.id === tradeId);
     if (!t) return;
     t.status = 'rejected';
-    if (t._supabaseId) TradesDB.updateStatus(t._supabaseId, 'rejected');
     this.selectedTradeId = null;
     App.toast('🗑 Trade offer cancelled.');
     App.render();
@@ -9620,10 +9469,6 @@ const Auth = {
     }
 
     // ── Diagnostic logs — open DevTools Console to debug ──────────
-    // Load trades from Supabase now that we know the active league
-    if (active && active.id) {
-      TradesDB.load(active.id);
-    }
   },
 
   setMode(mode) {
