@@ -2466,33 +2466,7 @@ const DB = {
   league: { name: '', tournament: 'IPL 2025', code: '' },
   currentUser: { id: null, name: '', email: '', isCommissioner: false, teamName: '', avatarUrl: null },
 
-  // Registry of joinable leagues keyed by invite code
-  joinableLeagues: {
-    'BND247': { name: 'The Boundary Boys', tournament: 'IPL 2025', size: 6, filled: 5, draftType: 'Snake',
-      managers: [
-        { name: 'Arjun',  avatar: 'A', color: '#22c55e', isYou: false },
-        { name: 'Priya',  avatar: 'P', color: '#f59e0b', isYou: false },
-        { name: 'Dev',    avatar: 'D', color: '#3b82f6', isYou: false },
-        { name: 'Sara',   avatar: 'S', color: '#8b5cf6', isYou: false },
-        { name: 'Rahul',  avatar: 'R', color: '#ec4899', isYou: false },
-      ]},
-    'CRIKET': { name: 'Weekend Warriors', tournament: 'World Cup 2025', size: 8, filled: 3, draftType: 'Auction',
-      managers: [
-        { name: 'Vikram', avatar: 'V', color: '#22c55e', isYou: false },
-        { name: 'Neha',   avatar: 'N', color: '#f59e0b', isYou: false },
-        { name: 'Karan',  avatar: 'K', color: '#3b82f6', isYou: false },
-      ]},
-    'STUMPS': { name: 'Office XI', tournament: 'T20 Blast', size: 10, filled: 7, draftType: 'Snake',
-      managers: [
-        { name: 'Amit',   avatar: 'A', color: '#22c55e', isYou: false },
-        { name: 'Pooja',  avatar: 'P', color: '#f59e0b', isYou: false },
-        { name: 'Rohan',  avatar: 'R', color: '#3b82f6', isYou: false },
-        { name: 'Divya',  avatar: 'D', color: '#8b5cf6', isYou: false },
-        { name: 'Suresh', avatar: 'S', color: '#ec4899', isYou: false },
-        { name: 'Meena',  avatar: 'M', color: '#06b6d4', isYou: false },
-        { name: 'Jay',    avatar: 'J', color: '#f97316', isYou: false },
-      ]},
-  },
+  joinableLeagues: {},  // populated by Leagues.fetchByCode() when user enters invite code
 
   // Commissioner-controlled settings
   settings: {
@@ -2544,13 +2518,15 @@ const DB = {
   // TODO(pre-launch): Replace mock manager names/stats with empty slots.
   // On sign-in, hydrateManagers() overwrites names with real member data.
   // At launch: set name to '' and zero out pts/wl so unfilled slots appear blank.
+  // Managers populated at runtime by Leagues.hydrateManagers().
+  // Palette slots are pre-assigned so colors are stable when slots hydrate.
   managers: [
-    { id: 1, name: 'Arjun',  color: '#22c55e', bg: 'rgba(34,197,94,0.15)',  rank: 1, pts: 847, ptsWeek: 187, wl: '8-2', ptsFor: 7820, ptsAgainst: 7104 },
-    { id: 2, name: 'Priya',  color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', rank: 2, pts: 821, ptsWeek: 162, wl: '7-3', ptsFor: 7540, ptsAgainst: 7089 },
-    { id: 3, name: 'Dev',    color: '#3b82f6', bg: 'rgba(59,130,246,0.15)', rank: 3, pts: 798, ptsWeek: 145, wl: '6-4', ptsFor: 7310, ptsAgainst: 7198 },
-    { id: 4, name: 'Sara',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.15)', rank: 4, pts: 764, ptsWeek: 134, wl: '5-5', ptsFor: 7105, ptsAgainst: 7210 },
-    { id: 5, name: 'Rahul',  color: '#ec4899', bg: 'rgba(236,72,153,0.15)', rank: 5, pts: 731, ptsWeek: 118, wl: '4-6', ptsFor: 6890, ptsAgainst: 7340 },
-    { id: 6, name: 'Meera',  color: '#06b6d4', bg: 'rgba(6,182,212,0.15)',  rank: 6, pts: 698, ptsWeek: 102, wl: '3-7', ptsFor: 6620, ptsAgainst: 7544 },
+    { id: 1, name: '', color: '#22c55e', bg: 'rgba(34,197,94,0.15)',  rank: 1, pts: 0, ptsWeek: 0, wl: '0-0', ptsFor: 0, ptsAgainst: 0 },
+    { id: 2, name: '', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', rank: 2, pts: 0, ptsWeek: 0, wl: '0-0', ptsFor: 0, ptsAgainst: 0 },
+    { id: 3, name: '', color: '#3b82f6', bg: 'rgba(59,130,246,0.15)', rank: 3, pts: 0, ptsWeek: 0, wl: '0-0', ptsFor: 0, ptsAgainst: 0 },
+    { id: 4, name: '', color: '#8b5cf6', bg: 'rgba(139,92,246,0.15)', rank: 4, pts: 0, ptsWeek: 0, wl: '0-0', ptsFor: 0, ptsAgainst: 0 },
+    { id: 5, name: '', color: '#ec4899', bg: 'rgba(236,72,153,0.15)', rank: 5, pts: 0, ptsWeek: 0, wl: '0-0', ptsFor: 0, ptsAgainst: 0 },
+    { id: 6, name: '', color: '#06b6d4', bg: 'rgba(6,182,212,0.15)',  rank: 6, pts: 0, ptsWeek: 0, wl: '0-0', ptsFor: 0, ptsAgainst: 0 },
   ],
 
   players: [
@@ -2605,107 +2581,26 @@ const DB = {
   ],
 
   myTeam: {
-    name: "Arjun's XI",
+    name: '',        // set from profile/team_name after sign-in
     players: [],
     bench:   [],
     maxBench: 4,
-
-    livePoints: { 1:98, 5:72, 10:45, 11:134, 2:88, 7:61, 8:38, 4:52, 3:44, 12:77, 19:22, 16:55 },
-    weeklyPts:  { 1:98, 5:72, 10:45, 11:134, 2:88, 7:61, 8:38, 4:52, 3:44, 12:77, 19:22, 16:55, 20:41, 6:33 },
+    livePoints: {},  // populated by live scoring feed
+    weeklyPts:  {},  // populated by scoring feed
   },
 
-  opponent: { name: "Priya's Dreamers", pts: 612 },
+  opponent: { name: '', pts: 0 }, // populated from schedule + scoring
 
   // Per-week matchup data: opponent id, their lineup, points scored
-  matchups: {
-    5: { oppId: 3, myPts: 782, oppPts: 698,
-         myLineup:   { starters:[1,5,11,2,7,10,8,4,3,12,16], bench:[19,20,6],
-                       pts:{1:88,5:64,11:121,2:75,7:55,10:38,8:42,4:48,3:39,12:71,16:42} },
-         oppLineup:  { starters:[3,17,9,12,24,8,14,4,18,13,22], bench:[15,19],
-                       pts:{3:72,17:58,9:81,12:62,24:55,8:44,14:38,4:51,18:68,13:41,22:28} } },
-    6: { oppId: 4, myPts: 814, oppPts: 761,
-         myLineup:   { starters:[1,5,11,2,7,10,8,4,3,12,16], bench:[19,20,6],
-                       pts:{1:102,5:78,11:148,2:91,7:62,10:41,8:38,4:55,3:47,12:88,16:64} },
-         oppLineup:  { starters:[4,18,13,22,12,8,14,2,16,9,7], bench:[6,20],
-                       pts:{4:82,18:71,13:55,22:66,12:74,8:39,14:43,2:68,16:57,9:78,7:28} } },
-    7: { oppId: 2, myPts: null, oppPts: null,  // current live week
-         myLineup:   { starters:[1,5,10,11,2,7,8,4,3,12,19], bench:[20,6,16],
-                       pts:{1:98,5:72,10:45,11:134,2:88,7:61,8:38,4:52,3:44,12:77,19:22} },
-         oppLineup:  { starters:[2,7,16,9,23,8,14,4,18,13,22], bench:[17,6],
-                       pts:{2:76,7:55,16:48,9:88,23:62,8:34,14:29,4:41,18:57,13:38,22:19} } },
-    8: { oppId: 5, myPts: null, oppPts: null },  // upcoming – no data
-    9: { oppId: 6, myPts: null, oppPts: null },  // upcoming – no data
-  },
+  matchups: {},  // populated from Supabase matchup/scoring tables
 
   schedule: [],  // auto-generated by Schedule.generate() on init
 
-  rosters: {
-    1: [1,5,10,11,19],
-    2: [2,7,16,9,23],
-    3: [3,17,9,12,24],
-    4: [4,12,18,13,22],
-    5: [6,13,15,20,21],
-    6: [8,14,18,19,20],
-  },
+  rosters: {},  // keyed by manager id; populated after draft completes
 
-  match: {
-    batting: { team: 'IND', score: '187', wkts: 4, overs: '18.2' },
-    fielding: { team: 'AUS', score: '162', wkts: 6, overs: '17.0' },
-    status: 'LIVE · 2nd Innings',
-  },
+  match: null,  // populated from live cricket data feed
 
-  trades: [
-    {
-      id: 1,
-      from: 2, // Priya
-      to: 1,   // Arjun (me)
-      status: 'pending',
-      created: '2 hours ago',
-      message: "Let's make this work! Kohli for Bumrah feels fair given recent form 🔥",
-      offer:  [2],   // Priya gives: Virat Kohli
-      asking: [11],  // wants: Jasprit Bumrah
-    },
-    {
-      id: 2,
-      from: 3, // Dev
-      to: 1,
-      status: 'pending',
-      created: '5 hours ago',
-      message: "Need a WK badly. Happy to throw in 2 players for Buttler.",
-      offer:  [9, 17],  // Dev gives: Narine + Du Plessis
-      asking: [5],      // wants: Jos Buttler
-    },
-    {
-      id: 3,
-      from: 1, // me → Priya
-      to: 2,
-      status: 'rejected',
-      created: '1 day ago',
-      message: "Starc is on fire right now, this is value for you!",
-      offer:  [10],  // I offered: Starc
-      asking: [16],  // wanted: Warner
-    },
-    {
-      id: 4,
-      from: 1, // me → Sara
-      to: 4,
-      status: 'accepted',
-      created: '3 days ago',
-      message: "",
-      offer:  [19],  // Axar Patel
-      asking: [13],  // Chahal
-    },
-    {
-      id: 5,
-      from: 5, // Rahul
-      to: 1,
-      status: 'pending',
-      created: '30 min ago',
-      message: "Quick one before the gameweek locks — Pant is dropping off. Siraj for Pant?",
-      offer:  [14],  // Siraj
-      asking: [4],   // KL Rahul (WK)
-    },
-  ],
+  trades: [],  // populated from Supabase trades table
 };
 
 // ============================================================
@@ -3091,14 +2986,8 @@ const App = {
   },
 
   initLiveScore() {
-    State.myLiveTotal = Object.values(DB.myTeam.livePoints).reduce((a,b)=>a+b,0);
-    State.events = [
-      { icon:'🏏', text:'<strong>Rohit Sharma</strong> hits a six off Hazlewood!', pts:'+8', time:'18.2' },
-      { icon:'🎯', text:'<strong>Jasprit Bumrah</strong> bowls Labuschange! Perfect yorker.', pts:'+40', time:'17.4' },
-      { icon:'🏏', text:'<strong>Virat Kohli</strong> reaches his 50! Superb knock.', pts:'+30', time:'15.1' },
-      { icon:'🧤', text:'<strong>Jos Buttler</strong> takes a sharp catch at slip!', pts:'+10', time:'12.3' },
-      { icon:'🎯', text:'Maiden over by <strong>Rashid Khan</strong>', pts:'+20', time:'10.0' },
-    ];
+    State.myLiveTotal = Object.values(DB.myTeam.livePoints||{}).reduce((a,b)=>a+b,0);
+    State.events = []; // populated from live scoring feed
   }
 };
 
@@ -3421,18 +3310,21 @@ const Screens = {
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
           <div style="text-align:center;flex:1">
-            <div class="avatar-ring" style="width:48px;height:48px;background:var(--green-dim);border-color:var(--green);color:var(--green);font-size:20px;margin:0 auto 8px">A</div>
-            <div style="font-size:13px;font-weight:700">Arjun</div>
-            <div style="font-size:11px;color:var(--text-2);margin-top:2px">Arjun's XI</div>
+            <div class="avatar-ring" style="width:48px;height:48px;background:var(--green-dim);border-color:var(--green);color:var(--green);font-size:20px;margin:0 auto 8px">${(DB.managers[0]?.name||'?')[0]}</div>
+            <div style="font-size:13px;font-weight:700">${DB.managers[0]?.name || 'You'}</div>
+            <div style="font-size:11px;color:var(--text-2);margin-top:2px">${DB.currentUser.teamName || DB.managers[0]?.name || ''}</div>
             <div style="font-family:var(--font-display);font-size:28px;font-weight:800;color:var(--green);margin-top:8px" id="my-matchup-score">${State.myLiveTotal}</div>
           </div>
           <div style="color:var(--text-3);font-weight:800;font-size:18px">VS</div>
-          <div style="text-align:center;flex:1;cursor:pointer" onclick="Home.showManagerMenu(2, event)" title="Click for options">
-            <div class="avatar-ring" style="width:48px;height:48px;background:var(--gold-dim);border-color:var(--gold);color:var(--gold);font-size:20px;margin:0 auto 8px">P</div>
-            <div style="font-size:13px;font-weight:700">Priya</div>
-            <div style="font-size:11px;color:var(--text-2);margin-top:2px">Priya's Dreamers</div>
-            <div style="font-family:var(--font-display);font-size:28px;font-weight:800;color:var(--gold);margin-top:8px" id="opp-matchup-score">${DB.opponent.pts}</div>
-          </div>
+          ${(() => {
+            const opp = DB.managers.find(m => m.id !== 1) || null;
+            return opp ? `<div style="text-align:center;flex:1">
+              <div class="avatar-ring" style="width:48px;height:48px;background:${opp.bg};border-color:${opp.color};color:${opp.color};font-size:20px;margin:0 auto 8px">${opp.name[0]||'?'}</div>
+              <div style="font-size:13px;font-weight:700">${opp.name}</div>
+              <div style="font-size:11px;color:var(--text-2);margin-top:2px">${DB.opponent.name || opp.name}</div>
+              <div style="font-family:var(--font-display);font-size:28px;font-weight:800;color:${opp.color};margin-top:8px" id="opp-matchup-score">${DB.opponent.pts || 0}</div>
+            </div>` : '<div style="text-align:center;flex:1;color:var(--text-3);font-size:13px">Awaiting opponent</div>';
+          })()}
         </div>
         <div style="margin-top:16px">
           <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-bottom:6px">
@@ -3541,99 +3433,6 @@ const Screens = {
     return Screens._draftPre();
   },
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // _renderBoard(opts) — single source of truth for the draft grid.
-  // opts.mode : 'pre' | 'live' | 'complete'   (default: 'live')
-  // opts.filterMgr : mgrId to dim other columns (complete mode)
-  // opts.isMyTurn  : bool (live mode)
-  // ══════════════════════════════════════════════════════════════════════════
-  _renderBoard({ mode = 'live', filterMgr = 'all', isMyTurn = false } = {}) {
-    const managers    = DB.managers;
-    const rounds      = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
-    const starterCount = DB.settings.league.startersCount || 11;
-    const isPre      = mode === 'pre';
-    const isComplete = mode === 'complete';
-    const isDone     = isComplete || (State.currentPick >= (State.draftOrder||[]).length && !isPre);
-
-    // Stable column order — sorted by draftPickOrder (same UUID array on all clients).
-    // Falls back to DB.managers order for mock/pre-draft where no session exists.
-    const boardManagers = (() => {
-      if (State.draftPickOrder && State.draftPickOrder.length) {
-        const ordered = State.draftPickOrder
-          .map(uuid => managers.find(m => m.memberId === uuid))
-          .filter(Boolean);
-        managers.forEach(m => { if (!ordered.includes(m)) ordered.push(m); });
-        return ordered;
-      }
-      return managers;
-    })();
-    const N    = boardManagers.length;
-    const grid = `60px repeat(${N}, 1fr)`;
-    const activePickerUUID = (State.draftOrder || [])[State.currentPick];
-
-    // Header row
-    let html = `<div class="draft-grid-header" style="display:grid;grid-template-columns:${grid};gap:6px;margin-bottom:6px">
-      <div></div>
-      ${boardManagers.map(m => `<div class="draft-cell-header" style="border-top:3px solid ${m.color}">${m.name}</div>`).join('')}
-    </div>`;
-
-    for (let r = 0; r < rounds; r++) {
-      const isStarter = r < starterCount;
-      html += `<div class="draft-grid-row" style="display:grid;grid-template-columns:${grid};gap:6px;margin-bottom:6px">`;
-      html += `<div class="round-label" style="display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center">
-        <span>R${r+1}</span>
-        <span style="font-size:8px;padding:1px 4px;border-radius:3px;background:${isStarter?'var(--green-dim)':'var(--bg-3)'};color:${isStarter?'var(--green)':'var(--text-3)'}">
-          ${isStarter?'STR':'BNC'}
-        </span>
-      </div>`;
-
-      boardManagers.forEach((mgr, s) => {
-        const isMe   = mgr.id === 1;
-        const dimmed = isComplete && filterMgr !== 'all' && mgr.id !== parseInt(filterMgr);
-
-        // Which absolute pick number does this cell represent?
-        const pickPos = r % 2 === 0 ? s : (N - 1 - s);
-        const pickNum = r * N + pickPos;
-
-        // Is this cell the currently active pick?
-        const isActive = !isPre && !isDone
-          && Math.floor(State.currentPick / N) === r
-          && (State.draftSessionId
-            ? mgr.memberId === activePickerUUID
-            : mgr.id      === activePickerUUID);
-
-        // What player (if any) has been picked here?
-        const pickedId = isPre ? null : (State.draftPicks[mgr.id] || [])[r];
-        const player   = pickedId ? DB.players.find(p => p.id === pickedId) : null;
-
-        let cls = 'draft-cell';
-        if (isActive) cls += ' active-pick';
-        else if (player) cls += ' filled';
-        else cls += ' empty-cell';
-
-        html += `<div class="${cls}" style="${dimmed ? 'opacity:0.3;' : ''}${isMe && player ? 'border:1px solid rgba(34,197,94,0.4);' : ''}">`;
-
-        if (player) {
-          html += `<div class="role-icon">${ROLES[player.role].icon}</div>
-            <div class="player-name" style="${isMe && isComplete ? 'color:var(--green)' : ''}">${player.name.split(' ')[0]}</div>
-            <div class="player-meta">${player.team}</div>`;
-        } else if (isActive) {
-          html += `<div style="color:var(--green);font-size:16px;animation:pulse 1s infinite">●</div>
-            <div style="font-size:10px;color:var(--green);margin-top:2px">${isMyTurn ? 'YOUR PICK' : 'ON PICK'}</div>`;
-        } else if (isComplete) {
-          html += `<div style="font-size:10px;color:var(--text-3)">—</div>`;
-        } else {
-          html += `<div style="font-size:10px;color:var(--text-3)">#${pickNum + 1}</div>`;
-        }
-
-        html += `</div>`;
-      });
-
-      html += `</div>`;
-    }
-
-    return `<div style="overflow-x:auto;padding-bottom:12px"><div style="min-width:600px">${html}</div></div>`;
-  },
 
   _draftPre() {
     const managers   = DB.managers;
@@ -4489,85 +4288,18 @@ const Modals = {
   },
 
   leagueChatMessages() {
-    return `
-      <div style="display:flex;gap:10px">
-        <div class="avatar-ring" style="width:32px;height:32px;background:var(--gold-dim);border-color:var(--gold);color:var(--gold);font-size:13px;flex-shrink:0">P</div>
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span style="font-size:13px;font-weight:600;cursor:pointer" onclick="Modals.openDM(2)" title="Click to send DM">Priya</span>
-            <span style="font-size:10px;color:var(--text-3)">2:14 PM</span>
-          </div>
-          <div style="background:var(--bg-2);border-radius:var(--radius-md);padding:10px 12px;font-size:13px;line-height:1.5">
-            Who's excited for tonight's match? MI vs CSK is going to be 🔥
-          </div>
-        </div>
-      </div>
-      <div style="display:flex;gap:10px">
-        <div class="avatar-ring" style="width:32px;height:32px;background:rgba(59,130,246,0.15);border-color:var(--blue);color:var(--blue);font-size:13px;flex-shrink:0">D</div>
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span style="font-size:13px;font-weight:600;cursor:pointer" onclick="Modals.openDM(3)" title="Click to send DM">Dev</span>
-            <span style="font-size:10px;color:var(--text-3)">2:18 PM</span>
-          </div>
-          <div style="background:var(--bg-2);border-radius:var(--radius-md);padding:10px 12px;font-size:13px;line-height:1.5">
-            I've got Bumrah starting. Need a big haul tonight!
-          </div>
-        </div>
-      </div>
-      <div style="display:flex;gap:10px">
-        <div class="avatar-ring" style="width:32px;height:32px;background:rgba(139,92,246,0.15);border-color:var(--purple);color:var(--purple);font-size:13px;flex-shrink:0">S</div>
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span style="font-size:13px;font-weight:600;cursor:pointer" onclick="Modals.openDM(4)" title="Click to send DM">Sara</span>
-            <span style="font-size:10px;color:var(--text-3)">2:22 PM</span>
-          </div>
-          <div style="background:var(--bg-2);border-radius:var(--radius-md);padding:10px 12px;font-size:13px;line-height:1.5">
-            Rohit's been in amazing form. Watch him drop 90+ today 👀
-          </div>
-        </div>
-      </div>
-      <div style="display:flex;gap:10px;align-self:flex-end;max-width:75%">
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;justify-content:flex-end">
-            <span style="font-size:10px;color:var(--text-3)">2:25 PM</span>
-            <span style="font-size:13px;font-weight:600">You</span>
-          </div>
-          <div style="background:var(--green-dim);border-radius:var(--radius-md);padding:10px 12px;font-size:13px;line-height:1.5;border:1px solid rgba(34,197,94,0.2)">
-            Haha we'll see! Good luck everyone 🏏
-          </div>
-        </div>
-        <div class="avatar-ring" style="width:32px;height:32px;background:var(--green-dim);border-color:var(--green);color:var(--green);font-size:13px;flex-shrink:0">A</div>
-      </div>
-    `;
+    // Chat messages will be populated from Supabase realtime channel.
+    // Show an empty state for now.
+    return `<div style="text-align:center;color:var(--text-3);padding:40px 20px;font-size:13px">
+      No messages yet. Say hi to your league! 👋
+    </div>`;
   },
 
   dmChatMessages(partner) {
     if (!partner) return '<div style="text-align:center;color:var(--text-3);padding:40px 20px">Select a manager to chat with</div>';
     
-    const dmThreads = {
-      2: [ // Priya
-        { from: 2, msg: "Hey! Great draft picks btw 👍", time: "Yesterday" },
-        { from: 1, msg: "Thanks! You too, Jadeja was a steal", time: "Yesterday" },
-        { from: 2, msg: "Wanna do a side bet on this week's matchup? 😏", time: "1:45 PM" },
-        { from: 1, msg: "You're on! Loser buys coffee ☕", time: "1:47 PM" },
-      ],
-      3: [ // Dev
-        { from: 3, msg: "Yo, trade offer: my Warner for your Buttler?", time: "2 hours ago" },
-        { from: 1, msg: "Hmm, let me think about it", time: "1 hour ago" },
-      ],
-      4: [ // Sara
-        { from: 4, msg: "Can you believe Rohit's form this season?!", time: "3:12 PM" },
-      ],
-      5: [ // Rahul
-        { from: 5, msg: "First time playing fantasy cricket, any tips?", time: "Yesterday" },
-        { from: 1, msg: "Check out the scoring rules modal!", time: "Yesterday" },
-      ],
-      6: [ // Meera
-        { from: 6, msg: "Is the waiver wire claim tonight at midnight?", time: "4 hours ago" },
-      ],
-    };
-    
-    const thread = dmThreads[partner.id] || [];
+    // DM threads will be loaded from Supabase messages table.
+    const thread = [];
     return thread.map(msg => {
       const isMe = msg.from === 1;
       const sender = isMe ? { name: 'You', color: 'var(--green)', bg: 'var(--green-dim)', initial: 'A' } : 
@@ -5497,6 +5229,100 @@ const Home = {
 // DRAFT CONTROLLER
 // ============================================================
 const Draft = {
+  // ══════════════════════════════════════════════════════════════════════════
+  // _renderBoard(opts) — single source of truth for the draft grid.
+  // opts.mode : 'pre' | 'live' | 'complete'   (default: 'live')
+  // opts.filterMgr : mgrId to dim other columns (complete mode)
+  // opts.isMyTurn  : bool (live mode)
+  // ══════════════════════════════════════════════════════════════════════════
+  _renderBoard({ mode = 'live', filterMgr = 'all', isMyTurn = false } = {}) {
+    const managers    = DB.managers;
+    const rounds      = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
+    const starterCount = DB.settings.league.startersCount || 11;
+    const isPre      = mode === 'pre';
+    const isComplete = mode === 'complete';
+    const isDone     = isComplete || (State.currentPick >= (State.draftOrder||[]).length && !isPre);
+
+    // Stable column order — sorted by draftPickOrder (same UUID array on all clients).
+    // Falls back to DB.managers order for mock/pre-draft where no session exists.
+    const boardManagers = (() => {
+      if (State.draftPickOrder && State.draftPickOrder.length) {
+        const ordered = State.draftPickOrder
+          .map(uuid => managers.find(m => m.memberId === uuid))
+          .filter(Boolean);
+        managers.forEach(m => { if (!ordered.includes(m)) ordered.push(m); });
+        return ordered;
+      }
+      return managers;
+    })();
+    const N    = boardManagers.length;
+    const grid = `60px repeat(${N}, 1fr)`;
+    const activePickerUUID = (State.draftOrder || [])[State.currentPick];
+
+    // Header row
+    let html = `<div class="draft-grid-header" style="display:grid;grid-template-columns:${grid};gap:6px;margin-bottom:6px">
+      <div></div>
+      ${boardManagers.map(m => `<div class="draft-cell-header" style="border-top:3px solid ${m.color}">${m.name}</div>`).join('')}
+    </div>`;
+
+    for (let r = 0; r < rounds; r++) {
+      const isStarter = r < starterCount;
+      html += `<div class="draft-grid-row" style="display:grid;grid-template-columns:${grid};gap:6px;margin-bottom:6px">`;
+      html += `<div class="round-label" style="display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center">
+        <span>R${r+1}</span>
+        <span style="font-size:8px;padding:1px 4px;border-radius:3px;background:${isStarter?'var(--green-dim)':'var(--bg-3)'};color:${isStarter?'var(--green)':'var(--text-3)'}">
+          ${isStarter?'STR':'BNC'}
+        </span>
+      </div>`;
+
+      boardManagers.forEach((mgr, s) => {
+        const isMe   = mgr.id === 1;
+        const dimmed = isComplete && filterMgr !== 'all' && mgr.id !== parseInt(filterMgr);
+
+        // Which absolute pick number does this cell represent?
+        const pickPos = r % 2 === 0 ? s : (N - 1 - s);
+        const pickNum = r * N + pickPos;
+
+        // Is this cell the currently active pick?
+        const isActive = !isPre && !isDone
+          && Math.floor(State.currentPick / N) === r
+          && (State.draftSessionId
+            ? mgr.memberId === activePickerUUID
+            : mgr.id      === activePickerUUID);
+
+        // What player (if any) has been picked here?
+        const pickedId = isPre ? null : (State.draftPicks[mgr.id] || [])[r];
+        const player   = pickedId ? DB.players.find(p => p.id === pickedId) : null;
+
+        let cls = 'draft-cell';
+        if (isActive) cls += ' active-pick';
+        else if (player) cls += ' filled';
+        else cls += ' empty-cell';
+
+        html += `<div class="${cls}" style="${dimmed ? 'opacity:0.3;' : ''}${isMe && player ? 'border:1px solid rgba(34,197,94,0.4);' : ''}">`;
+
+        if (player) {
+          html += `<div class="role-icon">${ROLES[player.role].icon}</div>
+            <div class="player-name" style="${isMe && isComplete ? 'color:var(--green)' : ''}">${player.name.split(' ')[0]}</div>
+            <div class="player-meta">${player.team}</div>`;
+        } else if (isActive) {
+          html += `<div style="color:var(--green);font-size:16px;animation:pulse 1s infinite">●</div>
+            <div style="font-size:10px;color:var(--green);margin-top:2px">${isMyTurn ? 'YOUR PICK' : 'ON PICK'}</div>`;
+        } else if (isComplete) {
+          html += `<div style="font-size:10px;color:var(--text-3)">—</div>`;
+        } else {
+          html += `<div style="font-size:10px;color:var(--text-3)">#${pickNum + 1}</div>`;
+        }
+
+        html += `</div>`;
+      });
+
+      html += `</div>`;
+    }
+
+    return `<div style="overflow-x:auto;padding-bottom:12px"><div style="min-width:600px">${html}</div></div>`;
+  },
+
   setPhase(phase) {
     State.draftPhase = phase;
     App.render();
@@ -7089,74 +6915,24 @@ var Schedule = {
     return schedule;
   },
 
-  // Seed results for all completed + live GWs.
-  // For my matchups: uses DB.matchups (real data).
-  // For other matches: deterministic mock scores based on manager rank + gw.
-  // For GWs beyond my latest completed one: also seeds non-user matches.
+  // Seed results into DB.schedule from real DB.matchups data.
+  // Mock scoring has been removed — results come from Supabase scoring tables.
   seedResults() {
     var myId = 1;
-
-    // Determine the "current" live GW number (first GW where I have no final pts)
-    var liveGW = null;
-    var completedGWs = {}; // gw -> true if my match is finalised
-
-    Object.keys(DB.matchups).forEach(function(gwStr) {
-      var gw = parseInt(gwStr);
-      var mu = DB.matchups[gw];
-      if (mu && mu.myPts != null && mu.oppPts != null) {
-        completedGWs[gw] = true;
-      } else if (liveGW === null && mu && (mu.myPts == null || mu.oppPts == null)) {
-        liveGW = gw;
-      }
-    });
-
-    // Helper: deterministic mock score for a manager in a given GW
-    // Uses rank (lower rank = stronger) + sine variation for realism
-    function mockScore(mgr, gw) {
-      // Base: stronger teams score higher; rank 1 averages ~820, rank 6 ~680
-      var base = 820 - (mgr.rank - 1) * 25;
-      // Deterministic variation: ±90 pts across weeks
-      var variation = Math.round(Math.sin(gw * 1.7 + mgr.id * 2.3) * 90);
-      return Math.max(400, base + variation);
-    }
-
     DB.schedule.forEach(function(entry) {
       if (entry.type !== 'group') return;
-      var gw = entry.gw;
-
       entry.matches.forEach(function(match) {
-        // Skip if already finalised
         if (match.result) return;
-
+        var mu = DB.matchups[entry.gw];
+        if (!mu || mu.myPts == null || mu.oppPts == null) return;
         var involveMe = (match.a === myId || match.b === myId);
-
-        if (involveMe) {
-          // Use real DB.matchups data if available and complete
-          var mu = DB.matchups[gw];
-          if (!mu || mu.myPts == null || mu.oppPts == null) return; // live or future
-          var oppId = match.a === myId ? match.b : match.a;
-          if (mu.oppId !== oppId) return; // schedule vs stored opp mismatch
-          var result = {};
-          result[myId]  = mu.myPts;
-          result[oppId] = mu.oppPts;
-          match.result = result;
-        } else {
-          // Non-user match: seed mock scores for all GWs up to and including live GW
-          // (past GWs are "complete"; live GW shows in-progress scores)
-          var maxSeedGW = liveGW !== null ? liveGW : (Object.keys(completedGWs).length > 0 ? Math.max.apply(null, Object.keys(completedGWs).map(Number)) : 0);
-          if (gw > maxSeedGW) return; // future — no result yet
-
-          var aBase2 = DB.managers.find(function(m){return m.id===match.a;});
-          var bBase2 = DB.managers.find(function(m){return m.id===match.b;});
-          if (!aBase2 || !bBase2) return;
-
-          var aPts = mockScore(aBase2, gw);
-          var bPts = mockScore(bBase2, gw);
-          var result2 = {};
-          result2[match.a] = aPts;
-          result2[match.b] = bPts;
-          match.result = result2;
-        }
+        if (!involveMe) return;
+        var oppId = match.a === myId ? match.b : match.a;
+        if (mu.oppId !== oppId) return;
+        var result = {};
+        result[myId]  = mu.myPts;
+        result[oppId] = mu.oppPts;
+        match.result = result;
       });
     });
   },
@@ -9654,7 +9430,7 @@ const Auth = {
     DB.currentUser.name  = fullName;
     DB.currentUser.email = user.email;
     DB.currentUser.id    = user.id;
-    DB.managers[0].name  = fullName;
+    DB.managers[0].name = fullName;
 
     // Enrich from the profiles table (async — overwrites baseline if richer data exists)
     const profile = await Profiles.load(user.id);
@@ -9680,14 +9456,14 @@ const Auth = {
       DB.settings = Object.assign({}, DB.settings, active.settings);
     }
 
-    // Restore draft state from Supabase (session + picks)
-    if (active && active.id) {
-      await DraftDB.restoreForLeague(active.id);
-    }
-
-    // Hydrate DB.managers with real member names from Supabase
+    // Hydrate DB.managers FIRST so restoreForLeague can look up memberId correctly
     if (active && active.id) {
       await Leagues.hydrateManagers(active.id, user.id);
+    }
+
+    // Restore draft state from Supabase (session + picks) — must come AFTER hydrateManagers
+    if (active && active.id) {
+      await DraftDB.restoreForLeague(active.id);
     }
 
     // Apply persisted league settings using deep merge (so nested keys like draft.pickTimerSecs apply)
