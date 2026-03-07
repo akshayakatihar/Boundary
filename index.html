@@ -7757,7 +7757,7 @@ const Trades = {
     App.render();
   },
 
-  accept(tradeId) {
+  async accept(tradeId) {
     const t = DB.trades.find(tr => tr.id === tradeId);
     if (!t) return;
     t.status = 'accepted';
@@ -7787,14 +7787,16 @@ const Trades = {
     // Save both managers' updated rosters to Supabase
     const lg = State.myLeagues[State.activeLeagueIndex];
     if (lg) {
+      const starterCount = DB.settings.league.startersCount || 11;
       const otherMgr = DB.managers.find(m => m.id === t.from);
-      // Save our roster
-      Rosters.save(DB.currentUser.id, lg.id, DB.myTeam.players, DB.myTeam.bench);
+      console.log('[accept] saving rosters, lg:', lg.id, 'otherMgr:', otherMgr?.name, otherMgr?.userId);
+      // Save commissioner's roster
+      await Rosters.save(DB.currentUser.id, lg.id, DB.myTeam.players, DB.myTeam.bench);
       // Save the other manager's roster
       if (otherMgr?.userId) {
-        const theirStarters = DB.rosters[t.from].slice(0, DB.settings.league.startersCount || 11);
-        const theirBench    = DB.rosters[t.from].slice(DB.settings.league.startersCount || 11);
-        Rosters.save(otherMgr.userId, lg.id, theirStarters, theirBench);
+        const theirStarters = DB.rosters[t.from].slice(0, starterCount);
+        const theirBench    = DB.rosters[t.from].slice(starterCount);
+        await Rosters.save(otherMgr.userId, lg.id, theirStarters, theirBench);
       }
     }
 
@@ -9438,6 +9440,7 @@ const Rosters = {
       console.error('[Rosters.save]', error.message);
       return false;
     }
+    console.log('[Rosters.save] saved', starters.length, 'starters for', userId);
     return true;
   },
 
