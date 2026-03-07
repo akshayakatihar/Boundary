@@ -4032,14 +4032,33 @@ const Screens = {
     const startingXI = [...startingPlayers].sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
     // Add empty slots up to expectedStarters so users can see open spots
     const emptySlotCount = Math.max(0, expectedStarters - startingXI.length);
-    const emptySlotHTML = Array.from({length: emptySlotCount}, (_, i) => `
-      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg-2);border:2px dashed var(--border);border-radius:var(--radius-lg);opacity:0.6">
+    const emptySlotHTML = Array.from({length: emptySlotCount}, (_, i) => {
+      // When in swap mode with a bench player selected, empty slots become valid targets
+      const swapSourceInBench = State.swapMode && State.swapSourceId &&
+        (DB.myTeam.bench || []).map(String).includes(String(State.swapSourceId));
+      if (swapSourceInBench) {
+        const sourceName = DB.players.find(p => String(p.id) === String(State.swapSourceId))?.name || 'player';
+        return `<div onclick="MyTeam.confirmSwapToEmpty()"
+          style="display:flex;align-items:center;gap:12px;padding:14px 16px;
+          background:rgba(34,197,94,0.08);border:2px dashed var(--green);border-radius:var(--radius-lg);
+          cursor:pointer;transition:all 0.15s"
+          onmouseover="this.style.background='rgba(34,197,94,0.15)'"
+          onmouseout="this.style.background='rgba(34,197,94,0.08)'">
+          <div style="width:36px;height:36px;border-radius:50%;background:rgba(34,197,94,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">⇄</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:var(--green)">Move ${sourceName} here</div>
+            <div style="font-size:11px;color:var(--text-2)">Tap to promote to Starting XI</div>
+          </div>
+        </div>`;
+      }
+      return `<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg-2);border:2px dashed var(--border);border-radius:var(--radius-lg);opacity:0.5">
         <div style="width:36px;height:36px;border-radius:50%;background:var(--bg-3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">➕</div>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:600;color:var(--text-3)">Empty slot</div>
-          <div style="font-size:11px;color:var(--text-3)">Move a bench player here or claim from Waiver Wire</div>
+          <div style="font-size:11px;color:var(--text-3)">Select a bench player's ⇄ to fill this slot</div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     const startingXIHTML = startingXI.map(p => renderSlot(p, false)).join('') + emptySlotHTML;
 
     const benchHTML = benchIds.map(id => renderSlot(getP(id), true)).join('')
@@ -4105,10 +4124,13 @@ const Screens = {
       </div>
 
       ${State.swapMode && State.swapSourceId ? `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--gold-dim);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-md)">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:var(--radius-md)">
         <span style="font-size:16px">⇄</span>
-        <div style="flex:1;font-size:13px;font-weight:600;color:var(--gold)">
-          <strong>${DB.players.find(p=>p.id===State.swapSourceId)?.name}</strong> selected — click any other player's ⇄ to swap
+        <div style="flex:1;font-size:13px;font-weight:600;color:var(--green)">
+          <strong>${DB.players.find(p=>String(p.id)===String(State.swapSourceId))?.name}</strong> selected —
+          ${(DB.myTeam.bench||[]).map(String).includes(String(State.swapSourceId))
+            ? "tap an empty starter slot to promote, or tap another player's ⇄ to swap"
+            : "tap a bench player's ⇄ to move to bench, or another starter's ⇄ to swap positions"}
         </div>
         <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px;flex-shrink:0" onclick="MyTeam.cancelSwap()">Cancel</button>
       </div>` : ''}
@@ -4839,6 +4861,26 @@ const MyTeam = {
     // Update button in-place without re-rendering the modal
     const btn = document.getElementById('watchlist-btn-' + playerId);
     if (btn) btn.textContent = State.watchlist.includes(playerId) ? '★ On Watchlist' : '☆ Add to Watchlist';
+  },
+
+  confirmSwapToEmpty() {
+    // Promote a bench player into an empty starter slot
+    if (!State.swapMode || !State.swapSourceId) return;
+    const sourceId = String(State.swapSourceId);
+    DB.myTeam.bench   = (DB.myTeam.bench   || []).map(String);
+    DB.myTeam.players = (DB.myTeam.players || []).map(String);
+    const inBench = DB.myTeam.bench.includes(sourceId);
+    if (!inBench) { App.toast('Player not on bench.', 'error'); this.cancelSwap(); return; }
+    // Move from bench → starters
+    DB.myTeam.bench   = DB.myTeam.bench.filter(id => id !== sourceId);
+    DB.myTeam.players.push(sourceId);
+    DB.rosters[1] = [...DB.myTeam.players, ...DB.myTeam.bench];
+    const sourceName = DB.players.find(p => String(p.id) === sourceId)?.name;
+    State.swapMode = false;
+    State.swapSourceId = null;
+    Rosters.flush();
+    App.toast(`✅ ${sourceName} promoted to Starting XI`);
+    App.render();
   },
 
   confirmSwap(targetId) {
