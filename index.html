@@ -3570,11 +3570,11 @@ const Screens = {
     const squadSections = ROLE_REQS.map(req => {
       const players = myPlayers.filter(p => p.role === req.role);
       const isBowAr = req.role === 'BOW' || req.role === 'AR';
-      const roleMin  = req.role === 'WK' ? 1 : req.role === 'BAT' ? 2 : 0;
+      const roleMin  = req.role === 'WK' ? 1 : 0;
       const met      = req.role === 'WK' ? counts.WK >= 1
-                     : req.role === 'BAT' ? counts.BAT >= 2
+                     : req.role === 'BAT' ? true
                      : true; // BOW/AR handled together
-      const minLabel = req.role === 'WK' ? 'min 1' : req.role === 'BAT' ? 'min 2' : '';
+      const minLabel = req.role === 'WK' ? 'min 1' : '';
       const statusBadge = minLabel
         ? (met
           ? `<span class="pill pill-green" style="font-size:9px">${minLabel} ✓</span>`
@@ -3593,7 +3593,7 @@ const Screens = {
 
       // Empty slots to show for this role
       const slotsToShow = req.role === 'WK' ? Math.max(0, 1 - counts.WK)
-                        : req.role === 'BAT' ? Math.max(0, 2 - counts.BAT)
+                        : req.role === 'BAT' ? 0
                         : 0; // BOW/AR shown together below
       const emptyRows = Array(slotsToShow).fill(0).map(() => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px dashed var(--border);border-radius:var(--radius-md);margin-bottom:4px;opacity:0.6">
@@ -3632,7 +3632,7 @@ const Screens = {
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px">
         ${[
           { label:'WK',  val: counts.WK,  min:1, color:'var(--purple)' },
-          { label:'BAT', val: counts.BAT, min:2, color:'var(--green)'  },
+          { label:'BAT', val: counts.BAT, min:0, color:'var(--green)'  },
           { label:'AR',  val: counts.AR,  min:0, color:'var(--gold)'   },
           { label:'BOW', val: counts.BOW, min:0, color:'var(--blue)'   },
         ].map(({ label, val, min, color }) => `
@@ -3645,11 +3645,13 @@ const Screens = {
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:13px;font-weight:700">${pickedTotal}/${rounds} picked</div>
-        ${bowArCount < 5 ? `<span class="pill pill-red" style="font-size:10px">BOW+AR: ${bowArCount}/5</span>` : `<span class="pill pill-green" style="font-size:10px">BOW+AR ✓</span>`}
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${counts.WK >= 1 ? `<span class="pill pill-green" style="font-size:10px">🧤 WK ✓</span>` : `<span class="pill pill-red" style="font-size:10px">🧤 WK 0/1</span>`}
+          ${bowArCount < 5 ? `<span class="pill pill-red" style="font-size:10px">BOW+AR: ${bowArCount}/5</span>` : `<span class="pill pill-green" style="font-size:10px">BOW+AR ✓</span>`}
+        </div>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-        ${counts.WK >= 1 ? `<span class="pill pill-green" style="font-size:10px">🧤 WK ✓</span>` : `<span class="pill pill-red" style="font-size:10px">🧤 Need WK</span>`}
-        ${counts.BAT >= 2 ? `<span class="pill pill-green" style="font-size:10px">🏏 BAT ✓</span>` : `<span class="pill pill-red" style="font-size:10px">🏏 BAT: ${counts.BAT}/2</span>`}
+        <span class="pill pill-green" style="font-size:10px">🏏 BAT: ${counts.BAT}</span>
       </div>
       ${bowArEmptyRows}
       ${squadSections.join('')}`;
@@ -3959,6 +3961,7 @@ const Screens = {
     const illegalReasons = [];
     if (wkCount < 1)    illegalReasons.push('at least 1 Wicket-Keeper required');
     if (bowArCount < 5) illegalReasons.push(`at least 5 Bowlers/All-Rounders required (you have ${bowArCount})`);
+    // No minimum batter requirement
     if (myPlayerIds.length !== expectedStarters && myPlayerIds.length > 0)
       illegalReasons.push(`Starting XI must have exactly ${expectedStarters} players (you have ${myPlayerIds.length})`);
     const isIllegal = illegalReasons.length > 0;
@@ -4168,6 +4171,11 @@ const Screens = {
           </div>`;
         }).join('');
 
+    const waiverSearchVal = State.waiverSearch || '';
+    const filteredAvailable = waiverSearchVal
+      ? available.filter(p => p.name.toLowerCase().includes(waiverSearchVal.toLowerCase()) || p.team.toLowerCase().includes(waiverSearchVal.toLowerCase()))
+      : available;
+
     return `
     <div style="margin-bottom:16px">
       <h2 style="font-family:var(--font-display);font-size:20px;font-weight:800;margin-bottom:4px">Waiver Wire</h2>
@@ -4181,8 +4189,11 @@ const Screens = {
 
       <!-- Left: available players -->
       <div>
-        <div class="section-label" style="margin-bottom:12px">Available Players (${available.length})</div>
-        ${available.map(p => {
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div class="section-label">Available Players (${filteredAvailable.length}${waiverSearchVal ? ' of ' + available.length : ''})</div>
+          <input class="input-field" style="flex:1;padding:7px 12px;font-size:13px" placeholder="Search players or teams..." value="${waiverSearchVal}" oninput="State.waiverSearch=this.value;App.render()" />
+        </div>
+        ${filteredAvailable.map(p => {
           const pid = String(p.id);
           const alreadyClaimed = claimedAddIds.has(pid);
           return `<div class="waiver-player-row">
@@ -5916,7 +5927,7 @@ const Draft = {
 
     // Minimum role requirements across full squad
     const needWK    = Math.max(0, 1 - counts.WK);
-    const needBAT   = Math.max(0, 2 - counts.BAT);
+    const needBAT   = 0; // no minimum batter requirement
     const needBowAR = Math.max(0, 5 - (counts.BOW + counts.AR));
 
     // Free picks = how many picks we can spend on ANY role without risking illegality
@@ -5946,7 +5957,7 @@ const Draft = {
 
     // Minimum requirements: 1 WK, 2+ BAT, 2+ BOW/AR (combined 5), total 11
     const wkOk  = counts.WK >= 1;
-    const batOk = counts.BAT >= 2;
+    const batOk = true; // no minimum batter requirement
     const bowArOk = (counts.BOW + counts.AR) >= 5;
 
     const trackerEl = document.getElementById('lineup-tracker');
