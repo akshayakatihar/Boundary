@@ -2620,7 +2620,7 @@ const State = {
   waiverClaims: [],
   draftTab: 'queue', // 'queue' | 'board' | 'squad'
   draftPicks: {},
-  timerVal: 30,
+  timerVal: 30, // overwritten by resetTimer() which reads DB.settings.draft.pickTimerSecs
   timerInterval: null,
   playerFilter: 'ALL',
   leagueTab: 'standings',
@@ -3649,7 +3649,7 @@ const Screens = {
         </div>
         <div class="round-info">Round ${currentRound} · Pick ${pickInRound} of ${numMgrs}</div>
         <div class="timer-progress">
-          <div class="timer-fill ${State.timerVal<=10?'urgent':''}" id="timer-fill" style="width:${(State.timerVal/30)*100}%"></div>
+          <div class="timer-fill ${State.timerVal<=10?'urgent':''}" id="timer-fill" style="width:${(State.timerVal/(DB.settings?.draft?.pickTimerSecs||30))*100}%"></div>
         </div>
       </div>
       <div class="timer-display ${State.timerVal<=10?'urgent':''}" id="timer-disp">${State.timerVal}s</div>
@@ -5464,9 +5464,13 @@ const Draft = {
     this.resetTimer();
   },
 
+  _timerMax() {
+    return DB.settings?.draft?.pickTimerSecs || 30;
+  },
+
   resetTimer() {
     if (State.timerInterval) clearInterval(State.timerInterval);
-    State.timerVal = 30;
+    State.timerVal = this._timerMax();
     this.updateTimerUI();
     State.timerInterval = setInterval(() => {
       State.timerVal--;
@@ -5479,10 +5483,11 @@ const Draft = {
   },
 
   updateTimerUI() {
+    const max = this._timerMax();
     const d = document.getElementById('timer-disp');
     const f = document.getElementById('timer-fill');
     if (d) { d.textContent = State.timerVal + 's'; d.className = 'timer-display' + (State.timerVal<=10?' urgent':''); }
-    if (f) { f.style.width = `${(State.timerVal/30)*100}%`; f.className = 'timer-fill' + (State.timerVal<=10?' urgent':''); }
+    if (f) { f.style.width = `${(State.timerVal/max)*100}%`; f.className = 'timer-fill' + (State.timerVal<=10?' urgent':''); }
   },
 
   pick(playerId) {
@@ -5833,8 +5838,9 @@ const Draft = {
     if (tabContentEl) {
       tabContentEl.innerHTML = Draft._tabContent(tab);
     }
-    // Re-apply role filter so it persists after every DOM update
-    if (tab === 'queue') this.applyQueueFilter();
+    // Re-apply role filter so it persists after every DOM update.
+    // Use requestAnimationFrame to ensure new DOM nodes are queryable.
+    if (tab === 'queue') requestAnimationFrame(() => this.applyQueueFilter());
 
     // ── 6. Update tab bar labels and active state ──
     const tabBtns = document.querySelectorAll('.draft-tab-btn');
@@ -9834,11 +9840,14 @@ const DraftRealtime = {
       .subscribe();
 
     if (State.draftSessionId) { this.resubscribePicks(State.draftSessionId); }
-    // Periodic poll every 8s as safety net for missed Realtime events
+    // Periodic poll every 5s as safety net for missed Realtime events
     if (this._pollInterval) clearInterval(this._pollInterval);
     this._pollInterval = setInterval(() => {
-      if (State.draftPhase === 'live') DraftRealtime._pollMissedPicks();
-    }, 8000);
+      if (State.draftSessionId && State.draftPhase === 'live') {
+        console.log('[poll] checking for missed picks, currentPick:', State.currentPick);
+        DraftRealtime._pollMissedPicks();
+      }
+    }, 5000);
   },
 
   // Re-subscribe picks channel once we have a real session ID
@@ -9885,14 +9894,8 @@ const DraftRealtime = {
   _applyIncomingPick(pick) {
     if (!pick || !pick.player_id) { console.warn('[_applyIncomingPick] no pick/player_id', pick); return; }
     if (State.drafted.includes(pick.player_id)) {
-      // Own pick echo: state already applied locally. Still sync currentPick to DB ground truth.
-      const pickNum = pick.pick_number || State.currentPick;
-      if (pickNum > State.currentPick) {
-        State.currentPick = pickNum;
-        console.log('[_applyIncomingPick] own pick echo, synced currentPick to', State.currentPick);
-      } else {
-        console.log('[_applyIncomingPick] already drafted, skipping', pick.player_id);
-      }
+      // Own pick echo: state already applied locally via pick(). No-op.
+      console.log('[_applyIncomingPick] own pick echo, currentPick already:', State.currentPick);
       return;
     }
     const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
