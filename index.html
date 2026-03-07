@@ -3883,7 +3883,13 @@ const Screens = {
     const curRound     = Math.floor(State.currentPick / numMgrs);
     const curPos       = State.currentPick % numMgrs;
     const activeSlot   = curRound % 2 === 0 ? curPos : (numMgrs - 1 - curPos);
-    const currentMgr   = managers[activeSlot] || managers[0];
+    // Use draftOrder to find who is actually picking — respects commissioner's configured order.
+    // Fall back to slot-position for mock/pre-session drafts where draftOrder holds integer IDs.
+    const pickerRef  = State.draftOrder[State.currentPick];
+    const currentMgr = (State.draftSessionId
+      ? managers.find(m => m.memberId === pickerRef)
+      : managers.find(m => m.id       === pickerRef))
+      || managers[activeSlot] || managers[0];
     const forcedRoles  = isMyTurn ? Draft._forcedRoles() : new Set();
     const tab          = State.draftTab || 'queue';
 
@@ -3904,8 +3910,14 @@ const Screens = {
       managers.forEach((mgr, s) => {
         const mgrKey   = s + 1;
         const isMe     = mgrKey === 1;
-        const pickNum  = r % 2 === 0 ? (r * numMgrs + s) : (r * numMgrs + (numMgrs - 1 - s));
-        const isActive = !isDraftDone && pickNum === State.currentPick;
+        // Check if this cell is the currently active pick by seeing if the current
+        // draftOrder entry matches this manager (UUID in real draft, id in mock).
+        const pickerRef3 = State.draftOrder[State.currentPick];
+        const isCurrentMgr = State.draftSessionId
+          ? mgr.memberId === pickerRef3
+          : mgr.id       === pickerRef3;
+        const isActive = !isDraftDone && isCurrentMgr &&
+          Math.floor(State.currentPick / numMgrs) === r;
         const pickedId = (State.draftPicks[mgrKey] || [])[r];
         const player   = pickedId ? DB.players.find(p => p.id === pickedId) : null;
         let cls = 'draft-cell' + (isActive ? ' active-pick' : player ? ' filled' : ' empty-cell');
@@ -6100,22 +6112,24 @@ const Draft = {
   autoPick() {
     const available = DB.players.filter(p => !State.drafted.some(id => String(id) === String(p.id)));
     if (!available.length) return;
-    const best = available.reduce((a,b) => b.pts > a.pts ? b : a);
-    const numMgrs    = DB.managers.length;
-    const posInRound = State.currentPick % numMgrs;  // 0-based position within this round
-    const round      = Math.floor(State.currentPick / numMgrs);
-    // Snake: even rounds L→R (pos 0 = slot 0), odd rounds R→L (pos 0 = slot N-1)
-    const slotInBase = round % 2 === 0 ? posInRound : (numMgrs - 1 - posInRound);
-    const mgrKey     = slotInBase + 1; // 1-based integer manager ID
-    const pid = String(best.id);
+    const best    = available.reduce((a,b) => b.pts > a.pts ? b : a);
+    const round   = Math.floor(State.currentPick / DB.managers.length);
+    // Always derive the picking manager from draftOrder, which respects commissioner's
+    // configured pick order — never use slot-position math for this.
+    const pickerUUID = State.draftOrder[State.currentPick];
+    const mgr = State.draftSessionId
+      ? DB.managers.find(m => m.memberId === pickerUUID)   // real draft: UUID lookup
+      : DB.managers.find(m => m.id       === pickerUUID);  // mock draft: integer id lookup
+    if (!mgr) { State.currentPick++; this.advancePick(); return; }
+    const mgrKey = mgr.id;
+    const pid    = String(best.id);
     State.drafted.push(pid);
     if (!State.draftPicks[mgrKey]) State.draftPicks[mgrKey] = [];
     State.draftPicks[mgrKey][round] = pid;
     State.currentPick++;
     best.drafted = true;
     best.owner   = mgrKey;
-    const m = DB.managers.find(mgr => mgr.id === mgrKey);
-    App.toast('⚡ ' + (m ? m.name : 'Bot') + ' auto-picked ' + best.name);
+    App.toast('⚡ ' + mgr.name + ' auto-picked ' + best.name);
     this.advancePick();
   },
 
@@ -6169,7 +6183,12 @@ const Draft = {
     const posInRound = State.currentPick % numMgrs;
     const curRound   = Math.floor(State.currentPick / numMgrs);
     const activeSlot = curRound % 2 === 0 ? posInRound : (numMgrs - 1 - posInRound);
-    const currentMgr = managers[activeSlot] || managers[0];
+    // Use draftOrder for correct manager name — respects commissioner's configured pick order
+    const pickerRef2  = State.draftOrder[State.currentPick];
+    const currentMgr  = (State.draftSessionId
+      ? managers.find(m => m.memberId === pickerRef2)
+      : managers.find(m => m.id       === pickerRef2))
+      || managers[activeSlot] || managers[0];
 
     // ── 1. Update tab bar labels (turn indicator + squad count) ──
     const tab = State.draftTab || 'queue';
@@ -9719,7 +9738,6 @@ const DraftDB = {
         player_id:        playerId,
         round:            round,
         pick_number:      pickNumber,
-        picked_by:        DB.currentUser?.id || null,
         picked_at:        new Date().toISOString(),
       });
     if (error) { console.error('[DraftDB.savePick]', error.message); }
@@ -10257,7 +10275,7 @@ const DraftRealtime = {
           State.draftSessionId = row.id;
           State.draftPickOrder = row.pick_order;
           await DraftDB.restoreForLeague(leagueId);
-          // Now we have a confirmed session ID — subscribe picks with the correct filter
+          // Now we have a confirmed session ID — subscribe picks with correct filter
           DraftRealtime.resubscribePicks(row.id);
           Draft.setPhase('live');
           App.navigate('draft');
@@ -10270,8 +10288,9 @@ const DraftRealtime = {
       })
       .subscribe();
 
-    // ── 2. Watch draft_picks — only if we already have a session ID.
-    //    If not, resubscribePicks() will be called when the session fires above.
+    // ── 2. Watch draft_picks — only if we already have a real session ID.
+    //    If not yet, resubscribePicks() is called by the session handler above
+    //    once the draft_sessions row fires with status='active'.
     if (State.draftSessionId) {
       this.resubscribePicks(State.draftSessionId);
     }
@@ -10296,8 +10315,8 @@ const DraftRealtime = {
         if (pick.picked_by && pick.picked_by === DB.currentUser?.id) return;
         const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
         if (!mgr) return; // unknown manager, ignore
-        const mgrId  = mgr.id;
-        const round  = (pick.round || 1) - 1; // 0-based round index
+        const mgrId = mgr.id;
+        const round = (pick.round || 1) - 1; // 0-based round index
         const player = DB.players.find(p => p.id === pick.player_id);
         if (player) { player.drafted = true; player.owner = mgrId; }
         if (!State.draftPicks[mgrId]) State.draftPicks[mgrId] = [];
