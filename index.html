@@ -5383,6 +5383,7 @@ const Draft = {
   // Called by commissioner to start the real live draft.
   // Fetches all league members, builds snake pick order, creates session in Supabase.
   async startDraft() {
+    try {
     const lg = DraftDB._activeLeague();
     if (!lg) { App.toast("No active league found.", "error"); return; }
 
@@ -5409,12 +5410,14 @@ const Draft = {
     }
 
     // Fetch all members of the league to build pick order
+    console.log('[startDraft] fetching members for league:', lg.id);
     const { data: members, error } = await _supabase
       .from("league_members")
       .select("id, user_id, team_name")
       .eq("league_id", lg.id);
-    if (error || !members.length) {
-      App.toast("Could not load league members.", "error");
+    console.log('[startDraft] members:', members?.length, 'error:', error?.message);
+    if (error || !members || !members.length) {
+      App.toast("Could not load league members: " + (error?.message || 'none found'), "error");
       return;
     }
 
@@ -5442,7 +5445,9 @@ const Draft = {
     const inOrder = new Set(pickOrder);
     realMembers.forEach(m => { if (!inOrder.has(m.id)) pickOrder.push(m.id); });
 
+    console.log('[startDraft] creating session with pickOrder:', pickOrder);
     const session = await DraftDB.createSession(lg.id, pickOrder);
+    console.log('[startDraft] session created:', session?.id, 'error would be null if ok');
     if (!session) { App.toast("Could not create draft session.", "error"); return; }
 
     State.draftSessionId = session.id;
@@ -5458,6 +5463,7 @@ const Draft = {
     App.initDraft();
     App.navigate('draft');
     App.toast("🏏 Draft started! You have the first pick.");
+    } catch(e) { console.error('[startDraft] EXCEPTION:', e.message, e.stack); App.toast('Error starting draft: ' + e.message, 'error'); }
   },
 
   initTimer() {
@@ -9185,9 +9191,10 @@ const DraftDB = {
       .from('draft_sessions')
       .select('*')
       .eq('league_id', leagueId)
-      .maybeSingle();
+      .order('updated_at', { ascending: false })
+      .limit(1);
     if (error) { console.error('[DraftDB.loadSession]', error.message); return null; }
-    return data;
+    return (data && data.length > 0) ? data[0] : null;
   },
 
   async createSession(leagueId, pickOrder) {
@@ -9793,12 +9800,37 @@ const Auth = {
 // keeping all connected users in sync automatically.
 // ============================================================
 const DraftRealtime = {
-  _sessionChannel: null,
-  _picksChannel:   null,
+  _settingsChannel: null,
+  _sessionChannel:  null,
+  _picksChannel:    null,
 
   subscribe(leagueId) {
     if (!leagueId || !_supabase) return;
     this.unsubscribe(); // clean up any existing subscriptions
+
+    // ── 0. Watch leagues table for settings changes (e.g. pick timer) ──
+    if (this._settingsChannel) _supabase.removeChannel(this._settingsChannel);
+    this._settingsChannel = _supabase
+      .channel(`league_settings_${leagueId}`)
+      .on('postgres_changes', {
+        event:  'UPDATE',
+        schema: 'public',
+        table:  'leagues',
+        filter: `id=eq.${leagueId}`,
+      }, (payload) => {
+        const row = payload.new;
+        if (!row || !row.settings) return;
+        const saved = row.settings;
+        // Deep-merge new settings into local DB.settings
+        ['league','draft','scoring','waiver'].forEach(section => {
+          if (saved[section] && typeof saved[section] === 'object') {
+            DB.settings[section] = Object.assign({}, DB.settings[section], saved[section]);
+          }
+        });
+        console.log('[settingsChannel] settings updated from commissioner, pickTimer now:', DB.settings.draft?.pickTimerSecs);
+        App.toast('⚙️ League settings updated by commissioner');
+      })
+      .subscribe();
 
     // ── 1. Watch draft_sessions for this league ──────────────
     this._sessionChannel = _supabase
@@ -9918,9 +9950,10 @@ const DraftRealtime = {
   },
 
   unsubscribe() {
-    if (this._sessionChannel) { _supabase.removeChannel(this._sessionChannel); this._sessionChannel = null; }
-    if (this._picksChannel)   { _supabase.removeChannel(this._picksChannel);   this._picksChannel   = null; }
-    if (this._pollInterval)   { clearInterval(this._pollInterval); this._pollInterval = null; }
+    if (this._settingsChannel) { _supabase.removeChannel(this._settingsChannel); this._settingsChannel = null; }
+    if (this._sessionChannel)  { _supabase.removeChannel(this._sessionChannel);  this._sessionChannel  = null; }
+    if (this._picksChannel)    { _supabase.removeChannel(this._picksChannel);    this._picksChannel    = null; }
+    if (this._pollInterval)    { clearInterval(this._pollInterval); this._pollInterval = null; }
   },
 };
 
