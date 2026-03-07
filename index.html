@@ -2977,16 +2977,20 @@ const App = {
   // "saved from url" marker and any ./index_files/ local path references
   // that Chrome injects when you use File > Save As.
   downloadCleanFile() {
-    // ⚠️  DO NOT use this button to get the file for GitHub deployment.
-    // outerHTML captures the live DOM which Chrome mangles (strips script content,
-    // injects runtime state, etc.) — the resulting file will be broken.
-    //
-    // ✅ CORRECT WORKFLOW:
-    //   1. Ask Claude to make changes
-    //   2. Download the file from Claude's output panel (the presented file link)
-    //   3. Replace your GitHub repo's index.html with that file
-    //   4. Commit + push → GitHub Pages deploys
-    App.toast('⚠️ Use the file from Claude\'s output panel — not this button!', 'error');
+    let html = document.documentElement.outerHTML;
+    // Strip Chrome's "saved from url" mark-of-the-web comment
+    html = html.replace(/<!--\s*saved from url[^>]*-->/gi, '');
+    // Fix any ./index_files/ resource paths Chrome may have injected
+    html = html.replace(/["']\.\/index_files\/[^"']*["']/g, '""');
+    // Ensure clean DOCTYPE
+    const full = '<!DOCTYPE html>\n' + html;
+    const blob = new Blob([full], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'index.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    this.toast('⬇️ Clean file downloaded!');
   },
 
   showModal(type, data) {
@@ -3640,26 +3644,40 @@ const Screens = {
     const forcedRoles  = isMyTurn ? Draft._forcedRoles() : new Set();
     const tab          = State.draftTab || 'queue';
 
-    // ── Board HTML ─────────────────────────────────────────────────────────
-    let boardHTML = `<div class="draft-grid-header" style="display:grid;grid-template-columns:${gridCols};gap:6px;margin-bottom:6px">
+    // ── Board HTML — columns in stable shared order (same for all clients) ──
+    const boardManagers = (() => {
+      if (State.draftPickOrder && State.draftPickOrder.length) {
+        const ordered = State.draftPickOrder.map(uuid => managers.find(m => m.memberId === uuid)).filter(Boolean);
+        managers.forEach(m => { if (!ordered.includes(m)) ordered.push(m); });
+        return ordered;
+      }
+      return managers;
+    })();
+    const numBoardMgrs  = boardManagers.length;
+    const boardGridCols = `60px repeat(${numBoardMgrs}, 1fr)`;
+    const activeMemberId = State.draftOrder[State.currentPick];
+
+    let boardHTML = `<div class="draft-grid-header" style="display:grid;grid-template-columns:${boardGridCols};gap:6px;margin-bottom:6px">
       <div></div>
-      ${managers.map(m => `<div class="draft-cell-header" style="border-top:3px solid ${m.color}">${m.name}</div>`).join('')}
+      ${boardManagers.map(m => `<div class="draft-cell-header" style="border-top:3px solid ${m.color}">${m.name}</div>`).join('')}
     </div>`;
     for (let r = 0; r < rounds; r++) {
       const isStarter = r < starterCount;
-      boardHTML += `<div class="draft-grid-row" style="display:grid;grid-template-columns:${gridCols};gap:6px;margin-bottom:6px">`;
+      boardHTML += `<div class="draft-grid-row" style="display:grid;grid-template-columns:${boardGridCols};gap:6px;margin-bottom:6px">`;
       boardHTML += `<div class="round-label" style="display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center">
         <span>R${r+1}</span>
         <span style="font-size:8px;padding:1px 4px;border-radius:3px;background:${isStarter?'var(--green-dim)':'var(--bg-3)'};color:${isStarter?'var(--green)':'var(--text-3)'}">
           ${isStarter?'STR':'BNC'}
         </span>
       </div>`;
-      managers.forEach((mgr, s) => {
-        const mgrKey   = s + 1;
-        const isMe     = mgrKey === 1;
-        const pickNum  = r % 2 === 0 ? (r * numMgrs + s) : (r * numMgrs + (numMgrs - 1 - s));
-        const isActive = !isDraftDone && pickNum === State.currentPick;
-        const pickedId = (State.draftPicks[mgrKey] || [])[r];
+      boardManagers.forEach((mgr, s) => {
+        const isMe     = mgr.id === 1;
+        const pickPos  = r % 2 === 0 ? s : (numBoardMgrs - 1 - s);
+        const pickNum  = r * numBoardMgrs + pickPos;
+        const isActive = !isDraftDone
+          && Math.floor(State.currentPick / numBoardMgrs) === r
+          && (State.draftSessionId ? mgr.memberId === activeMemberId : mgr.id === activeMemberId);
+        const pickedId = (State.draftPicks[mgr.id] || [])[r];
         const player   = pickedId ? DB.players.find(p => p.id === pickedId) : null;
         let cls = 'draft-cell' + (isActive ? ' active-pick' : player ? ' filled' : ' empty-cell');
         boardHTML += `<div class="${cls}" style="${isMe && player ? 'border:1px solid rgba(34,197,94,0.4)' : ''}">`;
@@ -5691,26 +5709,42 @@ const Draft = {
     const forcedRoles = isMyTurn ? Draft._forcedRoles() : new Set();
 
     if (tab === 'board') {
-      // Board HTML
-      let html = `<div class="draft-grid-header" style="display:grid;grid-template-columns:${gridCols};gap:6px;margin-bottom:6px">
+      // Build columns in stable shared order (same for all clients)
+      const boardManagers = (() => {
+        if (State.draftPickOrder && State.draftPickOrder.length) {
+          const ordered = State.draftPickOrder.map(uuid => managers.find(m => m.memberId === uuid)).filter(Boolean);
+          managers.forEach(m => { if (!ordered.includes(m)) ordered.push(m); });
+          return ordered;
+        }
+        return managers;
+      })();
+      const numBoardMgrs  = boardManagers.length;
+      const boardGridCols = `60px repeat(${numBoardMgrs}, 1fr)`;
+      const activeMemberId = State.draftOrder[State.currentPick]; // UUID of whose turn it is
+
+      let html = `<div class="draft-grid-header" style="display:grid;grid-template-columns:${boardGridCols};gap:6px;margin-bottom:6px">
         <div></div>
-        ${managers.map(m => `<div class="draft-cell-header" style="border-top:3px solid ${m.color}">${m.name}</div>`).join('')}
+        ${boardManagers.map(m => `<div class="draft-cell-header" style="border-top:3px solid ${m.color}">${m.name}</div>`).join('')}
       </div>`;
       for (let r = 0; r < rounds; r++) {
         const isStarter = r < starterCount;
-        html += `<div class="draft-grid-row" style="display:grid;grid-template-columns:${gridCols};gap:6px;margin-bottom:6px">`;
+        html += `<div class="draft-grid-row" style="display:grid;grid-template-columns:${boardGridCols};gap:6px;margin-bottom:6px">`;
         html += `<div class="round-label" style="display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center">
           <span>R${r+1}</span>
           <span style="font-size:8px;padding:1px 4px;border-radius:3px;background:${isStarter?'var(--green-dim)':'var(--bg-3)'};color:${isStarter?'var(--green)':'var(--text-3)'}">
             ${isStarter?'STR':'BNC'}
           </span>
         </div>`;
-        managers.forEach((mgr, s) => {
-          const mgrKey   = s + 1;
-          const isMe     = mgrKey === 1;
-          const pickNum  = r % 2 === 0 ? (r * numMgrs + s) : (r * numMgrs + (numMgrs - 1 - s));
-          const isActive = !isDraftDone && pickNum === State.currentPick;
-          const pickedId = (State.draftPicks[mgrKey] || [])[r];
+        boardManagers.forEach((mgr, s) => {
+          const isMe     = mgr.id === 1;
+          // Snake: which board column picks in round r at position s?
+          const pickPos  = r % 2 === 0 ? s : (numBoardMgrs - 1 - s);
+          const pickNum  = r * numBoardMgrs + pickPos;
+          // Active: is this the current pick AND this manager's column?
+          const isActive = !isDraftDone
+            && Math.floor(State.currentPick / numBoardMgrs) === r
+            && (State.draftSessionId ? mgr.memberId === activeMemberId : mgr.id === activeMemberId);
+          const pickedId = (State.draftPicks[mgr.id] || [])[r];
           const player   = pickedId ? DB.players.find(p => p.id === pickedId) : null;
           let cls = 'draft-cell' + (isActive ? ' active-pick' : player ? ' filled' : ' empty-cell');
           html += `<div class="${cls}" style="${isMe && player ? 'border:1px solid rgba(34,197,94,0.4)' : ''}">`;
@@ -5853,17 +5887,14 @@ const Draft = {
   },
 
   autoPick() {
-    // In a real live draft: only auto-pick when it is actually your turn.
     if (State.draftSessionId && !Draft._isMyTurn()) return;
     const available = DB.players.filter(p => !State.drafted.some(id => String(id) === String(p.id)));
     if (!available.length) return;
     const best  = available.reduce((a,b) => b.pts > a.pts ? b : a);
     const round = Math.floor(State.currentPick / DB.managers.length);
     if (State.draftSessionId) {
-      // Real draft: use pick() so the pick is persisted + synced to other users
       this.pick(String(best.id));
     } else {
-      // Mock draft: apply locally for the bot manager
       const pickerUUID = State.draftOrder[State.currentPick];
       const mgr = DB.managers.find(m => m.id === pickerUUID);
       const mgrKey = mgr ? mgr.id : (State.currentPick % DB.managers.length) + 1;
@@ -5926,11 +5957,12 @@ const Draft = {
     const pickInRound  = (State.currentPick % numMgrs) + 1;
     const isDraftDone  = State.currentPick >= State.draftOrder.length;
 
-    // Derive active column (slot index) from currentPick using snake direction
-    const posInRound = State.currentPick % numMgrs;
-    const curRound   = Math.floor(State.currentPick / numMgrs);
-    const activeSlot = curRound % 2 === 0 ? posInRound : (numMgrs - 1 - posInRound);
-    const currentMgr = managers[activeSlot] || managers[0];
+    // Derive active manager from draftOrder (same UUID on all clients)
+    const activePicker = State.draftOrder[State.currentPick];
+    const currentMgr = (State.draftSessionId
+      ? managers.find(m => m.memberId === activePicker)
+      : managers.find(m => m.id === activePicker))
+      || managers[0];
 
     // ── 1. Update tab bar labels (turn indicator + squad count) ──
     const tab = State.draftTab || 'queue';
@@ -10031,7 +10063,6 @@ const DraftRealtime = {
       })
       .subscribe();
 
-    // ── 2. Watch draft_picks deferred — resubscribePicks() is called once session ID is known.
     if (State.draftSessionId) { this.resubscribePicks(State.draftSessionId); }
   },
 
@@ -10055,7 +10086,7 @@ const DraftRealtime = {
 
   _applyIncomingPick(pick) {
     if (!pick || !pick.player_id) return;
-    if (State.drafted.includes(pick.player_id)) return; // already applied locally
+    if (State.drafted.includes(pick.player_id)) return;
     const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
     if (!mgr) return;
     const mgrId = mgr.id;
