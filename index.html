@@ -2690,6 +2690,26 @@ const App = {
     const players = await PlayersDB.fetchAll();
     if (players && players.length > 0) {
       DB.players = players;
+
+      // Re-apply ownership — applyToState may have run before players loaded,
+      // so we stamp owner=1 onto any player whose UUID is in our roster.
+      const myIds = new Set([...DB.myTeam.players, ...DB.myTeam.bench]);
+      if (myIds.size > 0) {
+        DB.players.forEach(p => {
+          if (myIds.has(p.id)) { p.drafted = true; p.owner = 1; }
+        });
+      }
+
+      // Also stamp ownership for other managers using DB.rosters (keyed by manager id)
+      Object.entries(DB.rosters).forEach(([mgrId, ids]) => {
+        const mid = parseInt(mgrId);
+        if (mid === 1) return; // already handled above
+        const idSet = new Set(ids);
+        DB.players.forEach(p => {
+          if (idSet.has(p.id)) { p.drafted = true; p.owner = mid; }
+        });
+      });
+
       // Re-render current screen if it uses player data
       const screen = location.hash.replace('#','') || 'home';
       if (['players','waiver','draft','trades'].includes(screen)) {
@@ -7553,15 +7573,9 @@ const Trades = {
 
   openPicker(side) {
     const isMyRoster = side === 'mine';
-    const targetMgr  = DB.managers.find(m => m.id === State.tradeTargetManager);
-
-    // Use p.owner to find each manager's players — this works whether IDs are
-    // integers (mock data) or UUIDs (real Supabase draft), because owner is always
-    // set to the integer manager ID when a player is drafted.
-    const ownerId    = isMyRoster ? 1 : State.tradeTargetManager;
-    const rosterPlayers = DB.players.filter(p => p.owner === ownerId);
-
+    const rosterIds = isMyRoster ? DB.myTeam.players : (DB.rosters[State.tradeTargetManager] || []);
     const alreadyAdded = isMyRoster ? State.tradeMyOffer : State.tradeTheirOffer;
+    const targetMgr = DB.managers.find(m => m.id === State.tradeTargetManager);
 
     const overlay = document.createElement('div');
     overlay.className = 'player-picker-overlay';
@@ -7573,21 +7587,20 @@ const Trades = {
           <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="document.getElementById('player-picker').remove()">✕ Close</button>
         </div>
         <div class="player-picker-list">
-          ${rosterPlayers.length === 0
-            ? `<div style="padding:24px;text-align:center;color:var(--text-3);font-size:13px">No players found on this roster.</div>`
-            : rosterPlayers.map(p => {
-                const added = alreadyAdded.includes(p.id);
-                return `<div class="picker-player-row ${added ? 'already-added' : ''}" onclick="Trades.addPlayer(${p.id}, '${side}')">
-                  <span style="font-size:18px">${ROLES[p.role].icon}</span>
-                  <div style="flex:1">
-                    <div style="font-size:13px;font-weight:600">${p.name}</div>
-                    <div style="font-size:11px;color:var(--text-2)">${p.team} · ${ROLES[p.role].label}</div>
-                  </div>
-                  <div style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--green)">${p.pts}</div>
-                  ${added ? '<span class="pill pill-green" style="font-size:10px">Added</span>' : '<button class="btn btn-primary" style="padding:5px 10px;font-size:11px">＋</button>'}
-                </div>`;
-              }).join('')
-          }
+          ${rosterIds.map(id => {
+            const p = DB.players.find(pl => pl.id === id);
+            if (!p) return '';
+            const added = alreadyAdded.includes(id);
+            return `<div class="picker-player-row ${added ? 'already-added' : ''}" onclick="Trades.addPlayer(${id}, '${side}')">
+              <span style="font-size:18px">${ROLES[p.role].icon}</span>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600">${p.name}</div>
+                <div style="font-size:11px;color:var(--text-2)">${p.team} · ${ROLES[p.role].label}</div>
+              </div>
+              <div style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--green)">${p.pts}</div>
+              ${added ? '<span class="pill pill-green" style="font-size:10px">Added</span>' : '<button class="btn btn-primary" style="padding:5px 10px;font-size:11px">＋</button>'}
+            </div>`;
+          }).join('')}
         </div>
       </div>`;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -9296,6 +9309,44 @@ const Rosters = {
     return true;
   },
 
+  // Load ALL rosters for the league and stamp p.owner on DB.players.
+  // Called after login so Trade Center can see every manager's squad.
+  async loadAll(leagueId) {
+    if (!leagueId || !_supabase) return;
+    const { data, error } = await _supabase
+      .from('roster_slots')
+      .select('user_id, player_ids, bench_ids')
+      .eq('league_id', leagueId);
+
+    if (error) {
+      console.error('[Rosters.loadAll]', error.message);
+      return;
+    }
+
+    (data || []).forEach(row => {
+      // Match this row's user_id to a manager integer ID
+      let mgrId = null;
+      if (row.user_id === DB.currentUser.id) {
+        mgrId = 1;
+      } else {
+        const matched = DB.managers.find(m => m.userId === row.user_id);
+        if (matched) mgrId = matched.id;
+      }
+      if (!mgrId) return;
+
+      const ids = [...(row.player_ids || []), ...(row.bench_ids || [])];
+      DB.rosters[mgrId] = ids;
+
+      // Stamp ownership on player objects
+      const idSet = new Set(ids);
+      DB.players.forEach(p => {
+        if (idSet.has(p.id)) { p.drafted = true; p.owner = mgrId; }
+      });
+    });
+
+    console.log('[Rosters.loadAll] rosters loaded for managers:', Object.keys(DB.rosters));
+  },
+
   // Merge a loaded roster row into DB.myTeam.
   applyToState(data) {
     if (!data) return;
@@ -9469,6 +9520,11 @@ const Auth = {
     }
 
     // ── Diagnostic logs — open DevTools Console to debug ──────────
+
+    // Load all managers' rosters so Trade Center can show everyone's players
+    if (active && active.id) {
+      Rosters.loadAll(active.id);
+    }
   },
 
   setMode(mode) {
