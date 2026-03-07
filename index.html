@@ -9396,10 +9396,18 @@ const DraftDB = {
         .sort((a, b) => a.pick_number - b.pick_number)
         .map(pk => pk.player_id);
       const starterCount = DB.settings.league.startersCount || 11;
-      DB.myTeam.players = myPicks.slice(0, starterCount);
-      DB.myTeam.bench   = myPicks.slice(starterCount);
-      DB.rosters[1]     = [...DB.myTeam.players, ...DB.myTeam.bench];
-      Rosters.saveAll(leagueId);
+      // Only set DB.myTeam from draft picks if Supabase roster_slots is empty
+      // (avoids overwriting post-trade rosters on every login)
+      const existingRoster = await Rosters.load(DB.currentUser.id, leagueId);
+      if (!existingRoster || !existingRoster.player_ids || existingRoster.player_ids.length === 0) {
+        DB.myTeam.players = myPicks.slice(0, starterCount);
+        DB.myTeam.bench   = myPicks.slice(starterCount);
+        DB.rosters[1]     = [...DB.myTeam.players, ...DB.myTeam.bench];
+        Rosters.saveAll(leagueId);
+        console.log('[restoreForLeague] no saved roster found — saving from draft picks');
+      } else {
+        console.log('[restoreForLeague] roster already in Supabase — skipping saveAll to preserve trades');
+      }
     }
   },
 };
