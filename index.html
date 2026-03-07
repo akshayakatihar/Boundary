@@ -5495,6 +5495,8 @@ const Draft = {
       // triggers the session Realtime channel on all clients, causing resubscribePicks()
       // to tear down and recreate the picks channel, which drops in-flight INSERT events.
       // Pick position is tracked authoritatively via pick_number in draft_picks.
+      // Poll 2s after our pick to catch any Realtime events the other client may have missed.
+      setTimeout(() => DraftRealtime._pollMissedPicks(), 2000);
     }
     this.advancePick();
   },
@@ -5844,7 +5846,11 @@ const Draft = {
 
   applyQueueFilter() {
     const search = document.getElementById('draft-search')?.value?.toLowerCase() || '';
-    const items = document.querySelectorAll('.queue-player-card');
+    // Scope to the live queue list only — not draft board or pre-draft cards
+    const queueList = document.getElementById('player-queue-list');
+    const items = queueList
+      ? queueList.querySelectorAll('.queue-player-card')
+      : document.querySelectorAll('.queue-player-card');
     items.forEach(item => {
       const name = item.querySelector('.pname')?.textContent.toLowerCase() || '';
       const role = item.dataset.role || '';
@@ -9785,6 +9791,11 @@ const DraftRealtime = {
       .subscribe();
 
     if (State.draftSessionId) { this.resubscribePicks(State.draftSessionId); }
+    // Periodic poll every 8s as safety net for missed Realtime events
+    if (this._pollInterval) clearInterval(this._pollInterval);
+    this._pollInterval = setInterval(() => {
+      if (State.draftPhase === 'live') DraftRealtime._pollMissedPicks();
+    }, 8000);
   },
 
   // Re-subscribe picks channel once we have a real session ID
@@ -9808,9 +9819,39 @@ const DraftRealtime = {
       });
   },
 
+  // Poll Supabase for any picks we may have missed (silent channel drop safety net).
+  // Called after each pick and on a periodic interval.
+  async _pollMissedPicks() {
+    if (!State.draftSessionId) return;
+    const { data, error } = await _supabase
+      .from('draft_picks')
+      .select('*')
+      .eq('draft_session_id', State.draftSessionId)
+      .order('pick_number', { ascending: true });
+    if (error || !data) return;
+    // Find any picks with pick_number > currentPick that we haven't applied
+    const missed = data.filter(p => p.pick_number > State.currentPick || !State.drafted.includes(p.player_id));
+    if (missed.length > 0) {
+      console.log('[_pollMissedPicks] found', missed.length, 'unapplied picks, replaying...');
+      // Re-run full applyPicksToState to reconcile
+      DraftDB.applyPicksToState(data, null);
+      App.render();
+    }
+  },
+
   _applyIncomingPick(pick) {
     if (!pick || !pick.player_id) { console.warn('[_applyIncomingPick] no pick/player_id', pick); return; }
-    if (State.drafted.includes(pick.player_id)) { console.log('[_applyIncomingPick] already drafted, skipping', pick.player_id); return; }
+    if (State.drafted.includes(pick.player_id)) {
+      // Own pick echo: state already applied locally. Still sync currentPick to DB ground truth.
+      const pickNum = pick.pick_number || State.currentPick;
+      if (pickNum > State.currentPick) {
+        State.currentPick = pickNum;
+        console.log('[_applyIncomingPick] own pick echo, synced currentPick to', State.currentPick);
+      } else {
+        console.log('[_applyIncomingPick] already drafted, skipping', pick.player_id);
+      }
+      return;
+    }
     const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
     if (!mgr) { console.warn('[_applyIncomingPick] no manager for memberId:', pick.league_member_id, 'known memberIds:', DB.managers.map(m=>m.memberId)); return; }
     const mgrId = mgr.id;
@@ -9833,6 +9874,7 @@ const DraftRealtime = {
   unsubscribe() {
     if (this._sessionChannel) { _supabase.removeChannel(this._sessionChannel); this._sessionChannel = null; }
     if (this._picksChannel)   { _supabase.removeChannel(this._picksChannel);   this._picksChannel   = null; }
+    if (this._pollInterval)   { clearInterval(this._pollInterval); this._pollInterval = null; }
   },
 };
 
