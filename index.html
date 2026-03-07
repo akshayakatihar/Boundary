@@ -3644,26 +3644,30 @@ const Screens = {
     const forcedRoles  = isMyTurn ? Draft._forcedRoles() : new Set();
     const tab          = State.draftTab || 'queue';
 
-    // ── Board HTML — columns in stable shared order (same for all clients) ──
+    // ── Board HTML — stable shared column order (same UUID order on all clients) ──
     const boardManagers = (() => {
       if (State.draftPickOrder && State.draftPickOrder.length) {
-        const ordered = State.draftPickOrder.map(uuid => managers.find(m => m.memberId === uuid)).filter(Boolean);
+        const ordered = State.draftPickOrder
+          .map(uuid => managers.find(m => m.memberId === uuid))
+          .filter(Boolean);
         managers.forEach(m => { if (!ordered.includes(m)) ordered.push(m); });
+        console.log('[boardManagers] using pickOrder:', State.draftPickOrder, '→ cols:', ordered.map(m => m.name + '(' + m.memberId + ')'));
         return ordered;
       }
-      return managers;
+      console.log('[boardManagers] FALLBACK — no draftPickOrder, using managers order:', managers.map(m => m.name));
+      return managers; // fallback for mock draft
     })();
-    const numBoardMgrs  = boardManagers.length;
-    const boardGridCols = `60px repeat(${numBoardMgrs}, 1fr)`;
-    const activeMemberId = State.draftOrder[State.currentPick];
+    const numBoard = boardManagers.length;
+    const boardGrid = `60px repeat(${numBoard}, 1fr)`;
+    const activePickerUUID = State.draftOrder[State.currentPick];
 
-    let boardHTML = `<div class="draft-grid-header" style="display:grid;grid-template-columns:${boardGridCols};gap:6px;margin-bottom:6px">
+    let boardHTML = `<div class="draft-grid-header" style="display:grid;grid-template-columns:${boardGrid};gap:6px;margin-bottom:6px">
       <div></div>
       ${boardManagers.map(m => `<div class="draft-cell-header" style="border-top:3px solid ${m.color}">${m.name}</div>`).join('')}
     </div>`;
     for (let r = 0; r < rounds; r++) {
       const isStarter = r < starterCount;
-      boardHTML += `<div class="draft-grid-row" style="display:grid;grid-template-columns:${boardGridCols};gap:6px;margin-bottom:6px">`;
+      boardHTML += `<div class="draft-grid-row" style="display:grid;grid-template-columns:${boardGrid};gap:6px;margin-bottom:6px">`;
       boardHTML += `<div class="round-label" style="display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center">
         <span>R${r+1}</span>
         <span style="font-size:8px;padding:1px 4px;border-radius:3px;background:${isStarter?'var(--green-dim)':'var(--bg-3)'};color:${isStarter?'var(--green)':'var(--text-3)'}">
@@ -3672,11 +3676,11 @@ const Screens = {
       </div>`;
       boardManagers.forEach((mgr, s) => {
         const isMe     = mgr.id === 1;
-        const pickPos  = r % 2 === 0 ? s : (numBoardMgrs - 1 - s);
-        const pickNum  = r * numBoardMgrs + pickPos;
+        const pickPos  = r % 2 === 0 ? s : (numBoard - 1 - s);
+        const pickNum  = r * numBoard + pickPos;
         const isActive = !isDraftDone
-          && Math.floor(State.currentPick / numBoardMgrs) === r
-          && (State.draftSessionId ? mgr.memberId === activeMemberId : mgr.id === activeMemberId);
+          && Math.floor(State.currentPick / numBoard) === r
+          && (State.draftSessionId ? mgr.memberId === activePickerUUID : mgr.id === activePickerUUID);
         const pickedId = (State.draftPicks[mgr.id] || [])[r];
         const player   = pickedId ? DB.players.find(p => p.id === pickedId) : null;
         let cls = 'draft-cell' + (isActive ? ' active-pick' : player ? ' filled' : ' empty-cell');
@@ -5709,26 +5713,27 @@ const Draft = {
     const forcedRoles = isMyTurn ? Draft._forcedRoles() : new Set();
 
     if (tab === 'board') {
-      // Build columns in stable shared order (same for all clients)
       const boardManagers = (() => {
         if (State.draftPickOrder && State.draftPickOrder.length) {
           const ordered = State.draftPickOrder.map(uuid => managers.find(m => m.memberId === uuid)).filter(Boolean);
           managers.forEach(m => { if (!ordered.includes(m)) ordered.push(m); });
+          console.log('[tabContent boardManagers] pickOrder:', State.draftPickOrder, '→ cols:', ordered.map(m => m.name + '(' + m.memberId + ')'));
           return ordered;
         }
+        console.log('[tabContent boardManagers] FALLBACK — no draftPickOrder');
         return managers;
       })();
-      const numBoardMgrs  = boardManagers.length;
-      const boardGridCols = `60px repeat(${numBoardMgrs}, 1fr)`;
-      const activeMemberId = State.draftOrder[State.currentPick]; // UUID of whose turn it is
+      const numBoard = boardManagers.length;
+      const boardGrid = `60px repeat(${numBoard}, 1fr)`;
+      const activePickerUUID = State.draftOrder[State.currentPick];
 
-      let html = `<div class="draft-grid-header" style="display:grid;grid-template-columns:${boardGridCols};gap:6px;margin-bottom:6px">
+      let html = `<div class="draft-grid-header" style="display:grid;grid-template-columns:${boardGrid};gap:6px;margin-bottom:6px">
         <div></div>
         ${boardManagers.map(m => `<div class="draft-cell-header" style="border-top:3px solid ${m.color}">${m.name}</div>`).join('')}
       </div>`;
       for (let r = 0; r < rounds; r++) {
         const isStarter = r < starterCount;
-        html += `<div class="draft-grid-row" style="display:grid;grid-template-columns:${boardGridCols};gap:6px;margin-bottom:6px">`;
+        html += `<div class="draft-grid-row" style="display:grid;grid-template-columns:${boardGrid};gap:6px;margin-bottom:6px">`;
         html += `<div class="round-label" style="display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center">
           <span>R${r+1}</span>
           <span style="font-size:8px;padding:1px 4px;border-radius:3px;background:${isStarter?'var(--green-dim)':'var(--bg-3)'};color:${isStarter?'var(--green)':'var(--text-3)'}">
@@ -5737,13 +5742,11 @@ const Draft = {
         </div>`;
         boardManagers.forEach((mgr, s) => {
           const isMe     = mgr.id === 1;
-          // Snake: which board column picks in round r at position s?
-          const pickPos  = r % 2 === 0 ? s : (numBoardMgrs - 1 - s);
-          const pickNum  = r * numBoardMgrs + pickPos;
-          // Active: is this the current pick AND this manager's column?
+          const pickPos  = r % 2 === 0 ? s : (numBoard - 1 - s);
+          const pickNum  = r * numBoard + pickPos;
           const isActive = !isDraftDone
-            && Math.floor(State.currentPick / numBoardMgrs) === r
-            && (State.draftSessionId ? mgr.memberId === activeMemberId : mgr.id === activeMemberId);
+            && Math.floor(State.currentPick / numBoard) === r
+            && (State.draftSessionId ? mgr.memberId === activePickerUUID : mgr.id === activePickerUUID);
           const pickedId = (State.draftPicks[mgr.id] || [])[r];
           const player   = pickedId ? DB.players.find(p => p.id === pickedId) : null;
           let cls = 'draft-cell' + (isActive ? ' active-pick' : player ? ' filled' : ' empty-cell');
@@ -5875,7 +5878,7 @@ const Draft = {
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <div class="filter-tabs" style="flex:1">
             ${['ALL','BAT','BOW','AR','WK'].map(r => `
-              <button class="filter-tab ${State.playerFilter===r?'active':''}" onclick="Draft.filter('${r}')">${r==='ALL'?'All':ROLES[r]?.icon+' '+ROLES[r]?.label}</button>
+              <button class="filter-tab ${State.playerFilter===r?'active':''}" data-role="${r}" onclick="Draft.filter('${r}')">${r==='ALL'?'All':ROLES[r]?.icon+' '+ROLES[r]?.label}</button>
             `).join('')}
           </div>
           <button id="draft-taken-toggle" class="filter-tab ${State.draftShowTaken?'active':''}" onclick="Draft.toggleShowTaken()" style="white-space:nowrap;flex-shrink:0">
@@ -5957,7 +5960,6 @@ const Draft = {
     const pickInRound  = (State.currentPick % numMgrs) + 1;
     const isDraftDone  = State.currentPick >= State.draftOrder.length;
 
-    // Derive active manager from draftOrder (same UUID on all clients)
     const activePicker = State.draftOrder[State.currentPick];
     const currentMgr = (State.draftSessionId
       ? managers.find(m => m.memberId === activePicker)
@@ -6056,12 +6058,13 @@ const Draft = {
 
   filter(role) {
     State.playerFilter = role;
-    // Update active tab UI without re-rendering the whole page
-    document.querySelectorAll('.filter-tab').forEach(b => {
-      const isAll = role === 'ALL' && b.textContent.trim() === 'All';
-      const matchesRole = role !== 'ALL' && b.textContent.includes(ROLES[role]?.label);
-      b.classList.toggle('active', isAll || matchesRole);
-    });
+    // Update only the draft queue filter tabs (not Players page tabs)
+    const queueHeader = document.querySelector('.queue-header');
+    if (queueHeader) {
+      queueHeader.querySelectorAll('.filter-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.role === role);
+      });
+    }
     this.applyQueueFilter();
   },
 
@@ -9408,6 +9411,7 @@ const Leagues = {
 
     // Trim any excess mock slots beyond real member count so no ghost/bot slots appear
     DB.managers = DB.managers.slice(0, ordered.length);
+    console.log('[hydrateManagers] final DB.managers order:', DB.managers.map(m => m.name + ' id=' + m.id + ' memberId=' + m.memberId));
   },
 };
 
@@ -9520,25 +9524,20 @@ const DraftDB = {
 
   applyPicksToState(picks, session) {
     if (!picks || !picks.length) return;
-    const myLeague   = this._activeLeague();
-    const myMemberId = myLeague ? myLeague.memberId : null;
     DB.managers.forEach(m => { State.draftPicks[m.id] = []; });
     State.drafted = [];
     picks.forEach(pick => {
       const playerId = pick.player_id;
-      const isMe     = pick.league_member_id === myMemberId;
-      // Derive mgrKey from snake order: same formula as autoPick
-      // pick.round is 1-based; pick_number is 1-based absolute
-      const numMgrs    = DB.managers.length;
-      const r0         = (pick.round - 1);                     // 0-based round
-      const absIdx0    = pick.pick_number - 1;                 // 0-based absolute pick
-      const posInRound = absIdx0 % numMgrs;                    // 0-based pos within round
-      const slotInBase = r0 % 2 === 0 ? posInRound : (numMgrs - 1 - posInRound);
-      const mgrId      = isMe ? 1 : (slotInBase + 1);
-      const round    = pick.round - 1;
+      const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
+      if (!mgr) {
+        console.warn('[applyPicksToState] no manager for memberId:', pick.league_member_id);
+        return;
+      }
+      const mgrId = mgr.id;
+      const round = (pick.round || 1) - 1;
       if (!State.draftPicks[mgrId]) State.draftPicks[mgrId] = [];
       State.draftPicks[mgrId][round] = playerId;
-      State.drafted.push(playerId);
+      if (!State.drafted.includes(playerId)) State.drafted.push(playerId);
       const p = DB.players.find(pl => pl.id === playerId);
       if (p) { p.drafted = true; p.owner = mgrId; }
     });
@@ -9554,6 +9553,7 @@ const DraftDB = {
     if (!session) return;
     State.draftSessionId = session.id;
     State.draftPickOrder = session.pick_order;
+    console.log('[restoreForLeague] draftPickOrder:', State.draftPickOrder, '| DB.managers:', DB.managers.map(m => m.name + ' memberId=' + m.memberId));
     const picks = await this.loadPicks(session.id);
     this.applyPicksToState(picks, session);
     if (session.status === 'completed') {
