@@ -4190,9 +4190,10 @@ const Screens = {
       <!-- Left: available players -->
       <div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-          <div class="section-label">Available Players (${filteredAvailable.length}${waiverSearchVal ? ' of ' + available.length : ''})</div>
-          <input class="input-field" style="flex:1;padding:7px 12px;font-size:13px" placeholder="Search players or teams..." value="${waiverSearchVal}" oninput="State.waiverSearch=this.value;App.render()" />
+          <div class="section-label">Available Players (<span id="waiver-available-count">${filteredAvailable.length}${waiverSearchVal ? ' of ' + available.length : ''}</span>)</div>
+          <input class="input-field" id="waiver-search-input" style="flex:1;padding:7px 12px;font-size:13px" placeholder="Search players or teams..." value="${waiverSearchVal}" oninput="Waiver.filterList(this.value)" />
         </div>
+        <div id="waiver-available-list">
         ${filteredAvailable.map(p => {
           const pid = String(p.id);
           const alreadyClaimed = claimedAddIds.has(pid);
@@ -4208,6 +4209,7 @@ const Screens = {
               : `<button class="btn btn-primary" style="padding:6px 12px;font-size:12px;flex-shrink:0" onclick="Waiver.startClaim('${pid}')">+ Claim</button>`}
           </div>`;
         }).join('')}
+        </div>
       </div>
 
       <!-- Right: your roster + pending claims -->
@@ -6999,6 +7001,37 @@ const Waiver = {
     State.waiverClaims = State.waiverClaims || [];
     State._claimAddId = null;
     State._claimDropId = null;
+  },
+
+  filterList(val) {
+    State.waiverSearch = val;
+    const listEl = document.getElementById('waiver-available-list');
+    const countEl = document.getElementById('waiver-available-count');
+    if (!listEl) return;
+    const draftedSet = new Set(State.drafted.map(id => String(id)));
+    const claimedAddIds = new Set((State.waiverClaims || []).map(c => String(c.addId)));
+    const available = DB.players
+      .filter(p => !draftedSet.has(String(p.id)))
+      .sort((a, b) => (b.pts || 0) - (a.pts || 0));
+    const filtered = val
+      ? available.filter(p => p.name.toLowerCase().includes(val.toLowerCase()) || p.team.toLowerCase().includes(val.toLowerCase()))
+      : available;
+    if (countEl) countEl.textContent = val ? `${filtered.length} of ${available.length}` : `${available.length}`;
+    listEl.innerHTML = filtered.map(p => {
+      const pid = String(p.id);
+      const alreadyClaimed = claimedAddIds.has(pid);
+      return `<div class="waiver-player-row">
+        <div style="font-size:20px">${ROLES[p.role].icon}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${p.name}</div>
+          <div style="font-size:11px;color:var(--text-2)">${p.team} · ${ROLES[p.role].label}${p.country ? ' · ' + p.country : ''}</div>
+        </div>
+        <div style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--green)">${p.pts} pts</div>
+        ${alreadyClaimed
+          ? `<span class="pill pill-gold" style="font-size:10px;flex-shrink:0">Claimed</span>`
+          : `<button class="btn btn-primary" style="padding:6px 12px;font-size:12px;flex-shrink:0" onclick="Waiver.startClaim('${pid}')">+ Claim</button>`}
+      </div>`;
+    }).join('') || '<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px">No players found</div>';
   },
 
   renderLockedBanner(s) {
