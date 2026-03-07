@@ -4153,8 +4153,11 @@ const Screens = {
     const myRoster  = myRosterIds.map(id => DB.players.find(p => String(p.id) === String(id))).filter(Boolean);
     const claims    = State.waiverClaims || []; // [{addId, dropId}]
 
-    const claimedAddIds  = new Set(claims.map(c => String(c.addId)));
-    const claimedDropIds = new Set(claims.map(c => String(c.dropId)));
+    const claimedAddIds  = new Set(claims.map(c => String(c.addId))); // kept for drop highlighting
+    const claimedDropIds = new Set(claims.map(c => c.dropId ? String(c.dropId) : null));
+    // Count how many claims exist per player (for badge)
+    const claimCounts = {};
+    claims.forEach(c => { const k = String(c.addId); claimCounts[k] = (claimCounts[k]||0)+1; });
 
     // Simulate projected squad size as claims execute to flag warnings
     const maxSquad   = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
@@ -4219,17 +4222,15 @@ const Screens = {
         <div id="waiver-available-list">
         ${filteredAvailable.map(p => {
           const pid = String(p.id);
-          const alreadyClaimed = claimedAddIds.has(pid);
+          const claimCount = claimCounts[pid] || 0;
           return `<div class="waiver-player-row">
             <div style="font-size:20px">${ROLES[p.role].icon}</div>
             <div style="flex:1">
-              <div style="font-size:13px;font-weight:600">${p.name}</div>
+              <div style="font-size:13px;font-weight:600">${p.name}${claimCount > 0 ? ` <span style="font-size:10px;color:var(--gold);font-weight:600">${claimCount}×</span>` : ''}</div>
               <div style="font-size:11px;color:var(--text-2)">${p.team} · ${ROLES[p.role].label}${p.country ? ' · ' + p.country : ''}</div>
             </div>
             <div style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--green)">${p.pts} pts</div>
-            ${alreadyClaimed
-              ? `<span class="pill pill-gold" style="font-size:10px;flex-shrink:0">Claimed</span>`
-              : `<button class="btn btn-primary" style="padding:6px 12px;font-size:12px;flex-shrink:0" onclick="Waiver.startClaim('${pid}')">+ Claim</button>`}
+            <button class="btn ${claimCount > 0 ? 'btn-secondary' : 'btn-primary'}" style="padding:6px 12px;font-size:12px;flex-shrink:0" onclick="Waiver.startClaim('${pid}')">+ Claim</button>
           </div>`;
         }).join('')}
         </div>
@@ -7042,17 +7043,17 @@ const Waiver = {
     if (countEl) countEl.textContent = val ? `${filtered.length} of ${available.length}` : `${available.length}`;
     listEl.innerHTML = filtered.map(p => {
       const pid = String(p.id);
-      const alreadyClaimed = claimedAddIds.has(pid);
+      const claimCounts2 = {};
+      (State.waiverClaims||[]).forEach(c => { const k = String(c.addId); claimCounts2[k] = (claimCounts2[k]||0)+1; });
+      const claimCount = claimCounts2[pid] || 0;
       return `<div class="waiver-player-row">
         <div style="font-size:20px">${ROLES[p.role].icon}</div>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${p.name}</div>
+          <div style="font-size:13px;font-weight:600">${p.name}${claimCount > 0 ? ` <span style="font-size:10px;color:var(--gold);font-weight:600">${claimCount}×</span>` : ''}</div>
           <div style="font-size:11px;color:var(--text-2)">${p.team} · ${ROLES[p.role].label}${p.country ? ' · ' + p.country : ''}</div>
         </div>
         <div style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--green)">${p.pts} pts</div>
-        ${alreadyClaimed
-          ? `<span class="pill pill-gold" style="font-size:10px;flex-shrink:0">Claimed</span>`
-          : `<button class="btn btn-primary" style="padding:6px 12px;font-size:12px;flex-shrink:0" onclick="Waiver.startClaim('${pid}')">+ Claim</button>`}
+        <button class="btn ${claimCount > 0 ? 'btn-secondary' : 'btn-primary'}" style="padding:6px 12px;font-size:12px;flex-shrink:0" onclick="Waiver.startClaim('${pid}')">+ Claim</button>
       </div>`;
     }).join('') || '<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px">No players found</div>';
   },
