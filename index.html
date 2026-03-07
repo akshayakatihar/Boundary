@@ -7789,9 +7789,17 @@ const Trades = {
     if (lg) {
       const starterCount = DB.settings.league.startersCount || 11;
       const otherMgr = DB.managers.find(m => m.id === t.from);
-      console.log('[accept] saving rosters, lg:', lg.id, 'otherMgr:', otherMgr?.name, otherMgr?.userId);
-      // Save commissioner's roster
-      await Rosters.save(DB.currentUser.id, lg.id, DB.myTeam.players, DB.myTeam.bench);
+      // Find the manager object for the current user (t.to = their mgr ID)
+      const myMgr = DB.managers.find(m => m.userId === DB.currentUser.id);
+      const myMgrId = myMgr ? myMgr.id : 1;
+      console.log('[accept] saving rosters, lg:', lg.id, 'myMgrId:', myMgrId, 'otherMgr:', otherMgr?.name, otherMgr?.userId);
+      // Save current user's roster from DB.rosters (correctly updated by swap)
+      const myStarters = DB.rosters[myMgrId].slice(0, starterCount);
+      const myBench    = DB.rosters[myMgrId].slice(starterCount);
+      await Rosters.save(DB.currentUser.id, lg.id, myStarters, myBench);
+      // Also sync DB.myTeam to match
+      DB.myTeam.players = myStarters;
+      DB.myTeam.bench   = myBench;
       // Save the other manager's roster
       if (otherMgr?.userId) {
         const theirStarters = DB.rosters[t.from].slice(0, starterCount);
@@ -9649,10 +9657,11 @@ const Auth = {
       }
     }
 
-    // ── Diagnostic logs — open DevTools Console to debug ──────────
+    // ── Load all rosters + trades, then re-render so My Team is populated on first load ──
     if (active && active.id) {
-      Rosters.loadAll(active.id);
-      TradesDB.load(active.id);
+      await Rosters.loadAll(active.id);
+      await TradesDB.load(active.id);
+      App.render(); // re-render after async data is ready
     }
   },
 
