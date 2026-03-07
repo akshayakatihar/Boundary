@@ -5491,9 +5491,10 @@ const Draft = {
         round + 1,   // DB uses 1-based rounds
         State.currentPick  // already incremented = pick number
       );
-      const newRound = Math.floor(State.currentPick / DB.managers.length) + 1;
-      const teamIdx  = State.currentPick % DB.managers.length;
-      DraftDB.updateSession(State.draftSessionId, State.currentPick, newRound, teamIdx, 'active');
+      // NOTE: Do NOT call updateSession here — updating draft_sessions on every pick
+      // triggers the session Realtime channel on all clients, causing resubscribePicks()
+      // to tear down and recreate the picks channel, which drops in-flight INSERT events.
+      // Pick position is tracked authoritatively via pick_number in draft_picks.
     }
     this.advancePick();
   },
@@ -9757,9 +9758,16 @@ const DraftRealtime = {
         if (!row) return;
 
         if (row.status === 'active') {
+          const isNewSession = (State.draftSessionId !== row.id);
           State.draftSessionId = row.id;
           State.draftPickOrder = row.pick_order || State.draftPickOrder;
-          DraftRealtime.resubscribePicks(row.id);
+          // Only resubscribe picks channel when we first learn the session ID.
+          // Do NOT resubscribe on every updateSession() call — that tears down
+          // the existing channel and causes pick events to be missed.
+          if (isNewSession) {
+            console.log('[sessionChannel] new session detected, resubscribing picks');
+            DraftRealtime.resubscribePicks(row.id);
+          }
           if (State.draftPhase !== 'live') {
             App.toast('🏏 Draft is starting!');
             await DraftDB.restoreForLeague(leagueId);
@@ -9806,13 +9814,18 @@ const DraftRealtime = {
     const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
     if (!mgr) { console.warn('[_applyIncomingPick] no manager for memberId:', pick.league_member_id, 'known memberIds:', DB.managers.map(m=>m.memberId)); return; }
     const mgrId = mgr.id;
+    // Use pick_number from DB as ground truth for currentPick position.
+    // This avoids drift when events arrive out of order or after a reconnect.
+    const pickNumber = pick.pick_number || (State.currentPick + 1);
     const round = (pick.round || 1) - 1;
     const player = DB.players.find(p => p.id === pick.player_id);
     if (player) { player.drafted = true; player.owner = mgrId; }
     if (!State.draftPicks[mgrId]) State.draftPicks[mgrId] = [];
     State.draftPicks[mgrId][round] = pick.player_id;
     State.drafted.push(pick.player_id);
-    State.currentPick++;
+    // Set currentPick to the authoritative pick_number from DB (not just +1)
+    State.currentPick = Math.max(State.currentPick, pickNumber);
+    console.log('[_applyIncomingPick] applied pick', pickNumber, 'by mgr', mgrId, '| new currentPick:', State.currentPick);
     Draft.resetTimer();
     App.render();
   },
