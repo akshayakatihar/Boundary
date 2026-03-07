@@ -5691,9 +5691,8 @@ const Draft = {
     // Only do surgical DOM updates when tab content container exists
     // If tab switched, fall through to full re-render at the end
 
-    // ── 2. Update timer bar text ──
-    // Update auto-pick button enabled/disabled state
-    const autoPickBtn = document.querySelector('.draft-header-bar .btn-secondary');
+    // ── 2. Update timer bar text + auto-pick button state ──
+    const autoPickBtn = document.querySelector('.pick-timer-bar .btn-secondary');
     if (autoPickBtn) {
       autoPickBtn.disabled = !isMyTurn;
       autoPickBtn.style.opacity = isMyTurn ? '1' : '0.4';
