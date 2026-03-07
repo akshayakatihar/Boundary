@@ -2692,18 +2692,17 @@ const App = {
       DB.players = players;
 
       // Re-apply ownership — applyToState may have run before players loaded,
-      // so we stamp owner=1 onto any player whose UUID is in our roster.
+      // so stamp owner=1 on any player whose UUID is in our roster
       const myIds = new Set([...DB.myTeam.players, ...DB.myTeam.bench]);
       if (myIds.size > 0) {
         DB.players.forEach(p => {
           if (myIds.has(p.id)) { p.drafted = true; p.owner = 1; }
         });
       }
-
-      // Also stamp ownership for other managers using DB.rosters (keyed by manager id)
+      // Stamp ownership for other managers too
       Object.entries(DB.rosters).forEach(([mgrId, ids]) => {
         const mid = parseInt(mgrId);
-        if (mid === 1) return; // already handled above
+        if (mid === 1) return;
         const idSet = new Set(ids);
         DB.players.forEach(p => {
           if (idSet.has(p.id)) { p.drafted = true; p.owner = mid; }
@@ -7572,38 +7571,45 @@ const Trades = {
   },
 
   openPicker(side) {
-    const isMyRoster = side === 'mine';
-    const rosterIds = isMyRoster ? DB.myTeam.players : (DB.rosters[State.tradeTargetManager] || []);
-    const alreadyAdded = isMyRoster ? State.tradeMyOffer : State.tradeTheirOffer;
-    const targetMgr = DB.managers.find(m => m.id === State.tradeTargetManager);
+    var isMyRoster    = (side === 'mine');
+    var targetMgr     = DB.managers.find(function(m) { return m.id === State.tradeTargetManager; });
+    var ownerId       = isMyRoster ? 1 : State.tradeTargetManager;
+    var rosterPlayers = DB.players.filter(function(p) { return p.owner === ownerId; });
+    var alreadyAdded  = isMyRoster ? State.tradeMyOffer : State.tradeTheirOffer;
+    var title         = isMyRoster ? 'Your Roster' : (targetMgr ? targetMgr.name + String.fromCharCode(39) + 's Roster' : 'Their Roster');
 
-    const overlay = document.createElement('div');
+    var rowsHTML = '';
+    if (rosterPlayers.length === 0) {
+      rowsHTML = '<div style="padding:24px;text-align:center;color:var(--text-3);font-size:13px">No players found on this roster.</div>';
+    } else {
+      rosterPlayers.forEach(function(p) {
+        var added  = alreadyAdded.includes(p.id);
+        var pid    = p.id;
+        var q      = String.fromCharCode(39); // single quote — avoids escaping issues
+        var action = added
+          ? '<span class="pill pill-green" style="font-size:10px">Added</span>'
+          : '<button class="btn btn-primary" style="padding:5px 10px;font-size:11px" onclick="event.stopPropagation();Trades.addPlayer(' + q + pid + q + ',' + q + side + q + ')">+</button>';
+        rowsHTML += '<div class="picker-player-row ' + (added ? 'already-added' : '') + '" onclick="Trades.addPlayer(' + q + pid + q + ',' + q + side + q + ')">'
+          + '<span style="font-size:18px">' + ROLES[p.role].icon + '</span>'
+          + '<div style="flex:1">'
+          + '<div style="font-size:13px;font-weight:600">' + p.name + '</div>'
+          + '<div style="font-size:11px;color:var(--text-2)">' + p.team + ' \xb7 ' + ROLES[p.role].label + '</div>'
+          + '</div>'
+          + '<div style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--green)">' + p.pts + '</div>'
+          + action
+          + '</div>';
+      });
+    }
+
+    var closeBtn = '<button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="document.getElementById(' + String.fromCharCode(39) + 'player-picker' + String.fromCharCode(39) + ').remove()">x Close</button>';
+    var overlay = document.createElement('div');
     overlay.className = 'player-picker-overlay';
     overlay.id = 'player-picker';
-    overlay.innerHTML = `
-      <div class="player-picker-panel">
-        <div class="player-picker-header">
-          <h3>${isMyRoster ? 'Your Roster' : `${targetMgr?.name}'s Roster`}</h3>
-          <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="document.getElementById('player-picker').remove()">✕ Close</button>
-        </div>
-        <div class="player-picker-list">
-          ${rosterIds.map(id => {
-            const p = DB.players.find(pl => pl.id === id);
-            if (!p) return '';
-            const added = alreadyAdded.includes(id);
-            return `<div class="picker-player-row ${added ? 'already-added' : ''}" onclick="Trades.addPlayer(${id}, '${side}')">
-              <span style="font-size:18px">${ROLES[p.role].icon}</span>
-              <div style="flex:1">
-                <div style="font-size:13px;font-weight:600">${p.name}</div>
-                <div style="font-size:11px;color:var(--text-2)">${p.team} · ${ROLES[p.role].label}</div>
-              </div>
-              <div style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--green)">${p.pts}</div>
-              ${added ? '<span class="pill pill-green" style="font-size:10px">Added</span>' : '<button class="btn btn-primary" style="padding:5px 10px;font-size:11px">＋</button>'}
-            </div>`;
-          }).join('')}
-        </div>
-      </div>`;
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.innerHTML = '<div class="player-picker-panel">'
+      + '<div class="player-picker-header"><h3>' + title + '</h3>' + closeBtn + '</div>'
+      + '<div class="player-picker-list">' + rowsHTML + '</div>'
+      + '</div>';
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
   },
 
@@ -9309,8 +9315,7 @@ const Rosters = {
     return true;
   },
 
-  // Load ALL rosters for the league and stamp p.owner on DB.players.
-  // Called after login so Trade Center can see every manager's squad.
+  // Load ALL rosters for the league — so Trade Center can show every manager's squad.
   async loadAll(leagueId) {
     if (!leagueId || !_supabase) return;
     const { data, error } = await _supabase
@@ -9343,8 +9348,7 @@ const Rosters = {
         if (idSet.has(p.id)) { p.drafted = true; p.owner = mgrId; }
       });
     });
-
-    console.log('[Rosters.loadAll] rosters loaded for managers:', Object.keys(DB.rosters));
+    console.log('[Rosters.loadAll] managers with rosters:', Object.keys(DB.rosters));
   },
 
   // Merge a loaded roster row into DB.myTeam.
