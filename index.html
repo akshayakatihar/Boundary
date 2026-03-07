@@ -2923,6 +2923,7 @@ const App = {
   },
 
   closeModal() {
+    ChatDB.unsubscribe();
     const m = document.getElementById('modal-backdrop');
     if (m) m.remove();
   },
@@ -2955,6 +2956,43 @@ const App = {
 
   openChat() {
     this.showModal('chat');
+    // Load messages and subscribe realtime after modal renders
+    setTimeout(async () => {
+      const leagueId = State.myLeagues?.[State.activeLeagueIndex]?.id;
+      if (leagueId) {
+        await Modals.loadAndRenderMessages();
+        // Subscribe to new messages — append to chat without full re-render
+        ChatDB.subscribe(leagueId, (msg) => {
+          const myMemberId = ChatDB._memberId();
+          const chatMode   = State.chatMode || 'league';
+          const chatWith   = State.chatWith || null;
+          // Only show if it matches current view
+          const isLeague   = !msg.to_member_id && chatMode === 'league';
+          const isDM       = msg.to_member_id && chatMode === 'dm' &&
+            (msg.from_member_id === chatWith || msg.to_member_id === chatWith);
+          if (!isLeague && !isDM) return;
+          // Skip if it's my own message (already shown optimistically)
+          if (msg.from_member_id === myMemberId) return;
+          const el = document.getElementById('chat-messages');
+          if (!el) return;
+          const mgr   = ChatDB.memberToManager(msg.from_member_id);
+          const name  = mgr?.name || 'Unknown';
+          const color = mgr?.color || 'var(--text-2)';
+          const bg    = mgr?.bg    || 'var(--bg-2)';
+          const time  = ChatDB.formatTime(msg.created_at);
+          const div   = document.createElement('div');
+          div.style.cssText = 'display:flex;gap:8px';
+          div.innerHTML = `
+            <div class="avatar-ring" style="width:28px;height:28px;background:${bg};border-color:${color};color:${color};font-size:11px;flex-shrink:0;align-self:flex-end">${name[0]}</div>
+            <div style="max-width:72%">
+              <div style="font-size:10px;color:var(--text-3);margin-bottom:3px">${name} · ${time}</div>
+              <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;line-height:1.5;word-break:break-word">${msg.body}</div>
+            </div>`;
+          el.appendChild(div);
+          el.scrollTop = el.scrollHeight;
+        });
+      }
+    }, 50);
   },
 
   createNewLeague() {
@@ -4303,77 +4341,83 @@ const Screens = {
 const Modals = {
   chat() {
     const chatMode = State.chatMode || 'league';
-    const chatWith = State.chatWith || null;
-    const chatPartner = chatWith ? DB.managers.find(m => m.id === chatWith) : null;
-    
+    const chatWith = State.chatWith || null; // memberId of DM partner
+    const chatPartner = chatWith ? DB.managers.find(m => m.memberId === chatWith) : null;
+    const leagueName  = State.myLeagues?.[State.activeLeagueIndex]?.name || 'League Chat';
+
     return `<div class="modal" style="max-width:500px;height:600px;max-height:85vh;display:flex;flex-direction:column;padding:0" onclick="event.stopPropagation()">
-      <div style="padding:20px;border-bottom:1px solid var(--border)">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
           <div>
-            <div class="modal-title" style="margin:0">💬 ${chatMode === 'league' ? 'League Chat' : `Chat with ${chatPartner?.name}`}</div>
-            <div style="font-size:12px;color:var(--text-2);margin-top:2px">${chatMode === 'league' ? 'The Boundary Boys' : chatPartner?.name + "'s XI"}</div>
+            <div class="modal-title" style="margin:0">💬 ${chatMode === 'league' ? 'League Chat' : 'Direct Message'}</div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:2px">${chatMode === 'league' ? leagueName : (chatPartner?.name || 'Select a manager')}</div>
           </div>
           <button class="modal-close" onclick="App.closeModal()" style="position:static">✕</button>
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="btn ${chatMode==='league'?'btn-primary':'btn-ghost'}" style="padding:6px 12px;font-size:12px" onclick="Modals.switchChatMode('league')">
-            👥 League
-          </button>
-          <button class="btn ${chatMode==='dm'?'btn-primary':'btn-ghost'}" style="padding:6px 12px;font-size:12px" onclick="Modals.showDMSelector()">
-            💬 Direct Message
-          </button>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <button class="btn ${chatMode==='league'?'btn-primary':'btn-ghost'}" style="padding:6px 12px;font-size:12px" onclick="Modals.switchChatMode('league')">👥 League</button>
+          ${DB.managers.filter(m => m.memberId && m.memberId !== ChatDB._memberId()).map(m => {
+            const isActive = chatMode==='dm' && chatWith===m.memberId;
+            return '<button class="btn ' + (isActive?'btn-primary':'btn-ghost') + '" style="padding:6px 12px;font-size:12px" onclick="Modals.openDM(\'' + m.memberId + '\')">' + m.name.split(' ')[0] + '</button>';
+          }).join('')}
         </div>
       </div>
-      <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px" id="chat-messages">
-        ${chatMode === 'league' ? this.leagueChatMessages() : this.dmChatMessages(chatPartner)}
+      <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px" id="chat-messages">
+        <div style="text-align:center;color:var(--text-3);font-size:12px;padding:20px">Loading messages...</div>
       </div>
-      <div style="padding:16px;border-top:1px solid var(--border)">
+      <div style="padding:12px 16px;border-top:1px solid var(--border)">
         <div style="display:flex;gap:8px">
-          <input class="input-field" placeholder="Type a message..." style="flex:1" id="chat-input" onkeypress="if(event.key==='Enter')Modals.sendChatMessage()">
-          <button class="btn btn-primary" onclick="Modals.sendChatMessage()">Send</button>
+          <input class="input-field" placeholder="Type a message..." style="flex:1;padding:9px 12px" id="chat-input" onkeypress="if(event.key==='Enter')Modals.sendChatMessage()">
+          <button class="btn btn-primary" style="padding:9px 16px" onclick="Modals.sendChatMessage()">Send</button>
         </div>
       </div>
     </div>`;
   },
 
-  leagueChatMessages() {
-    // Chat messages will be populated from Supabase realtime channel.
-    // Show an empty state for now.
-    return `<div style="text-align:center;color:var(--text-3);padding:40px 20px;font-size:13px">
-      No messages yet. Say hi to your league! 👋
-    </div>`;
-  },
-
-  dmChatMessages(partner) {
-    if (!partner) return '<div style="text-align:center;color:var(--text-3);padding:40px 20px">Select a manager to chat with</div>';
-    
-    // DM threads will be loaded from Supabase messages table.
-    const thread = [];
-    return thread.map(msg => {
-      const isMe = msg.from === 1;
-      const sender = isMe ? { name: 'You', color: 'var(--green)', bg: 'var(--green-dim)', initial: 'A' } : 
-                           { name: partner.name, color: partner.color, bg: partner.bg, initial: partner.name[0] };
-      return `
-        <div style="display:flex;gap:10px;${isMe?'align-self:flex-end;max-width:75%':''}">
-          ${!isMe ? `<div class="avatar-ring" style="width:32px;height:32px;background:${sender.bg};border-color:${sender.color};color:${sender.color};font-size:13px;flex-shrink:0">${sender.initial}</div>` : ''}
-          <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;${isMe?'justify-content:flex-end':''}">
-              ${isMe ? `<span style="font-size:10px;color:var(--text-3)">${msg.time}</span>` : ''}
-              <span style="font-size:13px;font-weight:600">${sender.name}</span>
-              ${!isMe ? `<span style="font-size:10px;color:var(--text-3)">${msg.time}</span>` : ''}
-            </div>
-            <div style="background:${isMe?'var(--green-dim)':'var(--bg-2)'};border-radius:var(--radius-md);padding:10px 12px;font-size:13px;line-height:1.5;${isMe?'border:1px solid rgba(34,197,94,0.2)':''}">
-              ${msg.msg}
+  renderMessages(msgs, myMemberId) {
+    if (!msgs.length) return '<div style="text-align:center;color:var(--text-3);font-size:13px;padding:40px 20px">No messages yet — say something! 👋</div>';
+    let lastDate = null;
+    return msgs.map(msg => {
+      const isMe   = msg.from_member_id === myMemberId;
+      const mgr    = ChatDB.memberToManager(msg.from_member_id);
+      const name   = isMe ? 'You' : (mgr?.name || 'Unknown');
+      const color  = mgr?.color || 'var(--text-2)';
+      const bg     = mgr?.bg    || 'var(--bg-2)';
+      const init   = name[0].toUpperCase();
+      const time   = ChatDB.formatTime(msg.created_at);
+      const msgDate = new Date(msg.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+      const dateDivider = msgDate !== lastDate
+        ? `<div style="text-align:center;font-size:11px;color:var(--text-3);margin:8px 0">${msgDate}</div>`
+        : '';
+      lastDate = msgDate;
+      return dateDivider + `
+        <div style="display:flex;gap:8px;${isMe ? 'flex-direction:row-reverse' : ''}">
+          <div class="avatar-ring" style="width:28px;height:28px;background:${bg};border-color:${color};color:${color};font-size:11px;flex-shrink:0;align-self:flex-end">${init}</div>
+          <div style="max-width:72%">
+            <div style="font-size:10px;color:var(--text-3);margin-bottom:3px;${isMe?'text-align:right':''}">${name} · ${time}</div>
+            <div style="background:${isMe?'rgba(34,197,94,0.15)':'var(--bg-2)'};border:1px solid ${isMe?'rgba(34,197,94,0.25)':'var(--border)'};border-radius:${isMe?'12px 12px 2px 12px':'12px 12px 12px 2px'};padding:9px 12px;font-size:13px;line-height:1.5;word-break:break-word">
+              ${msg.body}
             </div>
           </div>
-          ${isMe ? `<div class="avatar-ring" style="width:32px;height:32px;background:${sender.bg};border-color:${sender.color};color:${sender.color};font-size:13px;flex-shrink:0">${sender.initial}</div>` : ''}
-        </div>
-      `;
+        </div>`;
     }).join('');
+  },
+
+  async loadAndRenderMessages() {
+    const chatMode  = State.chatMode || 'league';
+    const chatWith  = State.chatWith || null;
+    const myMemberId = ChatDB._memberId();
+    const msgs = await ChatDB.load(chatMode === 'dm' ? chatWith : null);
+    const el   = document.getElementById('chat-messages');
+    if (!el) return;
+    el.innerHTML = Modals.renderMessages(msgs, myMemberId);
+    el.scrollTop = el.scrollHeight;
   },
 
   switchChatMode(mode) {
     State.chatMode = mode;
+    if (mode === 'league') State.chatWith = null;
+    // Re-render header by reopening, then reload messages
     App.closeModal();
     App.openChat();
   },
@@ -4412,62 +4456,39 @@ const Modals = {
     }, 0);
   },
 
-  openDM(managerId) {
+  openDM(memberId) {
     State.chatMode = 'dm';
-    State.chatWith = managerId;
+    State.chatWith = memberId; // now stores memberId not manager int id
     App.closeModal();
     App.openChat();
   },
 
-  sendChatMessage() {
+  async sendChatMessage() {
     const input = document.getElementById('chat-input');
     if (!input || !input.value.trim()) return;
-    const msgs = document.getElementById('chat-messages');
-    if (!msgs) return;
-    
-    const chatMode = State.chatMode || 'league';
-    const chatPartner = State.chatWith ? DB.managers.find(m => m.id === State.chatWith) : null;
-    
-    const msgDiv = document.createElement('div');
-    msgDiv.style.cssText = 'display:flex;gap:10px;align-self:flex-end;max-width:75%';
-    msgDiv.innerHTML = `
-      <div style="flex:1">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;justify-content:flex-end">
-          <span style="font-size:10px;color:var(--text-3)">Just now</span>
-          <span style="font-size:13px;font-weight:600">You</span>
-        </div>
-        <div style="background:var(--green-dim);border-radius:var(--radius-md);padding:10px 12px;font-size:13px;line-height:1.5;border:1px solid rgba(34,197,94,0.2)">
-          ${input.value}
-        </div>
-      </div>
-      <div class="avatar-ring" style="width:32px;height:32px;background:var(--green-dim);border-color:var(--green);color:var(--green);font-size:13px;flex-shrink:0">A</div>
-    `;
-    msgs.appendChild(msgDiv);
-    msgs.scrollTop = msgs.scrollHeight;
+    const body      = input.value.trim();
+    const chatMode  = State.chatMode || 'league';
+    const toMember  = chatMode === 'dm' ? (State.chatWith || null) : null;
     input.value = '';
-    
-    // Simulate reply in DM mode
-    if (chatMode === 'dm' && chatPartner) {
-      setTimeout(() => {
-        const replyDiv = document.createElement('div');
-        replyDiv.style.cssText = 'display:flex;gap:10px';
-        replyDiv.innerHTML = `
-          <div class="avatar-ring" style="width:32px;height:32px;background:${chatPartner.bg};border-color:${chatPartner.color};color:${chatPartner.color};font-size:13px;flex-shrink:0">${chatPartner.name[0]}</div>
-          <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-              <span style="font-size:13px;font-weight:600">${chatPartner.name}</span>
-              <span style="font-size:10px;color:var(--text-3)">Just now</span>
-            </div>
-            <div style="background:var(--bg-2);border-radius:var(--radius-md);padding:10px 12px;font-size:13px;line-height:1.5">
-              Got it! 👍
-            </div>
-          </div>
-        `;
-        msgs.appendChild(replyDiv);
-        msgs.scrollTop = msgs.scrollHeight;
-      }, 1200);
+    // Optimistic render
+    const myMemberId = ChatDB._memberId();
+    const msgs = document.getElementById('chat-messages');
+    if (msgs) {
+      const tempDiv = document.createElement('div');
+      tempDiv.style.cssText = 'display:flex;gap:8px;flex-direction:row-reverse';
+      const me = DB.managers.find(m => m.memberId === myMemberId);
+      tempDiv.innerHTML = `
+        <div class="avatar-ring" style="width:28px;height:28px;background:${me?.bg||'var(--green-dim)'};border-color:${me?.color||'var(--green)'};color:${me?.color||'var(--green)'};font-size:11px;flex-shrink:0;align-self:flex-end">${(me?.name||'Y')[0]}</div>
+        <div style="max-width:72%">
+          <div style="font-size:10px;color:var(--text-3);margin-bottom:3px;text-align:right">You · Just now</div>
+          <div style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.25);border-radius:12px 12px 2px 12px;padding:9px 12px;font-size:13px;line-height:1.5;word-break:break-word">${body}</div>
+        </div>`;
+      msgs.appendChild(tempDiv);
+      msgs.scrollTop = msgs.scrollHeight;
     }
+    await ChatDB.send(body, toMember);
   },
+
 
   createLeague() {
     return `<div class="modal" style="max-width:520px" onclick="event.stopPropagation()">
@@ -4524,6 +4545,7 @@ const Modals = {
       </div>
     </div>`;
   },
+
 
   selectLeagueSize(size) {
     State.newLeagueSize = size;
@@ -5245,8 +5267,9 @@ const Home = {
   sendDM(managerId) {
     const menu = document.getElementById('manager-menu');
     if (menu) menu.remove();
+    const mgr = DB.managers.find(m => m.id === managerId);
     State.chatMode = 'dm';
-    State.chatWith = managerId;
+    State.chatWith = mgr?.memberId || null;
     App.openChat();
   },
 
@@ -6602,8 +6625,8 @@ const League = {
       <div class="standings-row ${isMe?'my-row':''} ${isExpanded?'expanded':''}"
            style="display:grid;grid-template-columns:32px 44px 1fr 80px 80px 80px;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background var(--transition)"
            onclick="${isMe ? `League.toggleExpand(${m.id})` : `event.stopPropagation(); League.showManagerAction(${m.id}, event)`}"
-           onmouseover="this.style.background='${isMe?'rgba(34,197,94,0.12)':'var(--bg-2)'}'"
-           onmouseout="this.style.background='${isMe?'rgba(34,197,94,0.08)':'transparent'}'">
+           onmouseover="this.style.background='${isMe?`rgba(34,197,94,0.12)`:`var(--bg-2)`}'"
+           onmouseout="this.style.background='${isMe?`rgba(34,197,94,0.08)`:`transparent`}'">
         <div style="display:flex;align-items:center">
           <div class="rank-badge rank-${m.rank<=3?m.rank:'other'}">${m.rank}</div>
         </div>
@@ -9695,6 +9718,79 @@ const DraftDB = {
 // Schema: id, league_id, user_id, player_ids (int[]), bench_ids (int[]),
 //         team_name (text), updated_at (timestamptz)
 // ============================================================
+const ChatDB = {
+  _channel: null,
+
+  _leagueId() { return State.myLeagues?.[State.activeLeagueIndex]?.id || null; },
+  _memberId() { return State.myLeagues?.[State.activeLeagueIndex]?.memberId || null; },
+
+  // Load messages — pass toMemberId=null for league chat, or a UUID for DM
+  async load(toMemberId) {
+    const leagueId = this._leagueId();
+    if (!leagueId || !_supabase) return [];
+    let query = _supabase.from('messages').select('*')
+      .eq('league_id', leagueId)
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (toMemberId) {
+      const myMemberId = this._memberId();
+      // DM: messages between me and the other person in either direction
+      query = query.or(
+        `and(from_member_id.eq.${myMemberId},to_member_id.eq.${toMemberId}),and(from_member_id.eq.${toMemberId},to_member_id.eq.${myMemberId})`
+      );
+    } else {
+      // League chat: messages with no to_member_id
+      query = query.is('to_member_id', null);
+    }
+    const { data, error } = await query;
+    if (error) { console.error('[ChatDB.load]', error.message); return []; }
+    return data || [];
+  },
+
+  async send(body, toMemberId) {
+    const leagueId = this._leagueId();
+    const fromMemberId = this._memberId();
+    if (!leagueId || !fromMemberId || !_supabase || !body.trim()) return null;
+    const { data, error } = await _supabase.from('messages').insert({
+      league_id:      leagueId,
+      from_member_id: fromMemberId,
+      to_member_id:   toMemberId || null,
+      body:           body.trim(),
+    }).select().single();
+    if (error) { console.error('[ChatDB.send]', error.message); return null; }
+    return data;
+  },
+
+  // Subscribe to realtime new messages for this league
+  subscribe(leagueId, onMessage) {
+    if (this._channel) _supabase.removeChannel(this._channel);
+    this._channel = _supabase
+      .channel('messages_' + leagueId)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'messages',
+        filter: 'league_id=eq.' + leagueId,
+      }, payload => { onMessage(payload.new); })
+      .subscribe(status => console.log('[ChatDB] realtime:', status));
+  },
+
+  unsubscribe() {
+    if (this._channel) { _supabase.removeChannel(this._channel); this._channel = null; }
+  },
+
+  // Resolve member_id → manager display info
+  memberToManager(memberId) {
+    return DB.managers.find(m => m.memberId === memberId) || null;
+  },
+
+  formatTime(ts) {
+    const d = new Date(ts);
+    const now = new Date();
+    const diffH = (now - d) / 3600000;
+    if (diffH < 24) return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  },
+};
+
 const WaiverDB = {
 
   _memberId() {
