@@ -2499,7 +2499,7 @@ const DB = {
       order: [1,2,3,4,5,6], // manager IDs in draft order
     },
     waiver: {
-      order: [6,5,4,3,2,1], // reverse of draft order [1,2,3,4,5,6]; successful claim drops to bottom
+      order: [], // populated dynamically from DB.managers after draft; reverse draft order
       type: 'rolling',
       processingTime: '00:00',      // daily midnight IST by default
       processingTimezone: 'IST',
@@ -3964,9 +3964,9 @@ const Screens = {
     const isIllegal = illegalReasons.length > 0;
     // Squad size warnings (not illegal but shown separately)
     const squadWarning = totalInSquad > expectedSquad
-      ? `⚠️ Too many players (${totalInSquad}/${expectedSquad}) — drop ${totalInSquad - expectedSquad} via Waiver Wire`
+      ? `⚠️ Too many players (${totalInSquad}/${expectedSquad}) — use the 🗑 Drop button below to remove ${totalInSquad - expectedSquad} player${totalInSquad - expectedSquad > 1 ? 's' : ''}`
       : totalInSquad < expectedSquad && totalInSquad > 0
-      ? `ℹ️ You have space for ${expectedSquad - totalInSquad} more player${expectedSquad - totalInSquad > 1 ? 's' : ''} — check the Waiver Wire`
+      ? `ℹ️ You have space for ${expectedSquad - totalInSquad} more player${expectedSquad - totalInSquad > 1 ? 's' : ''} — add them via Waiver Wire (no drop required)`
       : null;
 
     // Countdown: minutes until next GW lock (mock: 2h 47m from now)
@@ -4023,11 +4023,20 @@ const Screens = {
       </div>`;
     };
 
-    // Empty bench slot — when in swap mode with a source, it becomes a valid swap target
     // Flat Starting XI — all players in a single list, sorted by role for readability
     const ROLE_ORDER = { WK: 0, BAT: 1, AR: 2, BOW: 3 };
     const startingXI = [...startingPlayers].sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
-    const startingXIHTML = startingXI.map(p => renderSlot(p, false)).join('');
+    // Add empty slots up to expectedStarters so users can see open spots
+    const emptySlotCount = Math.max(0, expectedStarters - startingXI.length);
+    const emptySlotHTML = Array.from({length: emptySlotCount}, (_, i) => `
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg-2);border:2px dashed var(--border);border-radius:var(--radius-lg);opacity:0.6">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--bg-3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">➕</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text-3)">Empty slot</div>
+          <div style="font-size:11px;color:var(--text-3)">Move a bench player here or claim from Waiver Wire</div>
+        </div>
+      </div>`).join('');
+    const startingXIHTML = startingXI.map(p => renderSlot(p, false)).join('') + emptySlotHTML;
 
     const benchHTML = benchIds.map(id => renderSlot(getP(id), true)).join('')
       || `<div style="text-align:center;padding:20px;color:var(--text-3);font-size:13px">
@@ -5695,6 +5704,11 @@ const Draft = {
       // Persist roster + mark session complete (save ALL managers)
       Rosters.flush();
       Rosters.saveAll(Rosters._activeLeagueId());
+      // Set waiver order = reverse draft order (last pick gets first waiver)
+      if (DB.settings.waiver.order.length === 0 || DB.settings.waiver.order.length !== DB.managers.length) {
+        const draftOrder = State.draftPickOrder || DB.managers.map(m => m.memberId);
+        DB.settings.waiver.order = [...DB.managers.map(m => m.id)].reverse();
+      }
       if (State.draftSessionId) {
         const totalRounds = Math.ceil(State.draftOrder.length / DB.managers.length);
         DraftDB.updateSession(State.draftSessionId, State.currentPick, totalRounds, 0, 'completed');
@@ -7024,6 +7038,10 @@ const Waiver = {
     const addP = DB.players.find(p => String(p.id) === State._claimAddId);
     if (!addP) return;
 
+    const myTotal  = (DB.myTeam.players || []).length + (DB.myTeam.bench || []).length;
+    const maxSquad = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
+    State._claimNeedsDrop = myTotal >= maxSquad;
+
     // Build roster rows for drop selection
     const myRosterIds    = [...(DB.myTeam.players || []), ...(DB.myTeam.bench || [])];
     // Claims for same drop player ARE allowed — you may not get all of them, that's fine
@@ -7064,11 +7082,16 @@ const Waiver = {
         <div style="font-size:12px;color:var(--text-2);margin-bottom:16px">
           ${ROLES[addP.role].icon} ${addP.team} · ${ROLES[addP.role].label} · <strong style="color:var(--green)">${addP.pts} pts</strong>
         </div>
-        <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">Select player to drop if claim succeeds:</div>
-        <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:16px">${rowsHTML}</div>
+        ${State._claimNeedsDrop
+          ? `<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">Select player to drop if claim succeeds:</div>
+             <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:16px">${rowsHTML}</div>`
+          : `<div style="padding:12px 14px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:var(--radius-md);margin-bottom:16px;font-size:13px;color:var(--green);font-weight:600">
+               ✅ Your squad has space — no drop required!
+             </div>`
+        }
         <div style="display:flex;gap:8px">
           <button class="btn btn-ghost" style="flex:1" onclick="Waiver.closeClaimModal()">Cancel</button>
-          <button class="btn btn-primary" style="flex:1;opacity:0.4" id="claim-confirm-btn" disabled onclick="Waiver.confirmClaim()">Submit Claim</button>
+          <button class="btn btn-primary" style="flex:1;${State._claimNeedsDrop ? 'opacity:0.4' : ''}" id="claim-confirm-btn" ${State._claimNeedsDrop ? 'disabled' : ''} onclick="Waiver.confirmClaim()">Submit Claim</button>
         </div>
       </div>`;
     document.body.appendChild(modalEl);
@@ -7091,7 +7114,13 @@ const Waiver = {
   confirmClaim() {
     const addId  = State._claimAddId;
     const dropId = State._claimDropId;
-    if (!addId || !dropId) return;
+    const myTotal = (DB.myTeam.players || []).length + (DB.myTeam.bench || []).length;
+    const maxSquad = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
+    const needsDrop = myTotal >= maxSquad;
+    if (!addId || (needsDrop && !dropId)) {
+      App.toast('Please select a player to drop.', 'error');
+      return;
+    }
 
     // Validate resulting lineup would be legal
     const addP  = DB.players.find(p => String(p.id) === addId);
@@ -7116,9 +7145,9 @@ const Waiver = {
     }
 
     State.waiverClaims = State.waiverClaims || [];
-    State.waiverClaims.push({ addId, dropId });
+    State.waiverClaims.push({ addId, dropId: dropId || null });
     this.closeClaimModal();
-    App.toast('✅ Waiver claim submitted! Processes at midnight IST.');
+    App.toast(dropId ? '✅ Waiver claim submitted! Processes at midnight IST.' : '✅ Waiver claim submitted! Player will be added at midnight (no drop needed).');
     App.render();
   },
 
@@ -9470,6 +9499,10 @@ const DraftDB = {
         console.log('[restoreForLeague] no saved roster found — saving from draft picks');
       } else {
         console.log('[restoreForLeague] roster already in Supabase — skipping saveAll to preserve trades');
+      }
+      // Ensure waiver order is set correctly from managers
+      if (DB.settings.waiver.order.length === 0 || DB.settings.waiver.order.length !== DB.managers.length) {
+        DB.settings.waiver.order = [...DB.managers.map(m => m.id)].reverse();
       }
     }
   },
