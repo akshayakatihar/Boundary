@@ -3556,6 +3556,12 @@ const Screens = {
       const met      = req.role === 'WK' ? counts.WK >= 1
                      : req.role === 'BAT' ? counts.BAT >= 2
                      : true; // BOW/AR handled together
+      const minLabel = req.role === 'WK' ? 'min 1' : req.role === 'BAT' ? 'min 2' : '';
+      const statusBadge = minLabel
+        ? (met
+          ? `<span class="pill pill-green" style="font-size:9px">${minLabel} ✓</span>`
+          : `<span class="pill pill-red" style="font-size:9px">Need ${minLabel}</span>`)
+        : '';
 
       const rows = players.map(p => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-2);border-radius:var(--radius-md);margin-bottom:4px">
@@ -3583,6 +3589,7 @@ const Screens = {
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <span style="font-size:13px;font-weight:700">${req.icon} ${req.label}s</span>
           <span style="font-size:11px;color:var(--text-3)">${players.length} picked</span>
+          ${statusBadge}
         </div>
         ${rows}${emptyRows}
       </div>`;
@@ -3976,7 +3983,7 @@ const Screens = {
       if (!p) return '';
       const weekPts   = DB.myTeam.weeklyPts[p.id] ?? '—';
       const seasonPts = p.pts;
-      const isSource  = State.swapMode && State.swapSourceId === p.id;
+      const isSource  = State.swapMode && String(State.swapSourceId) === String(p.id);
       const roleClass = p.role.toLowerCase();
 
       let slotClass = 'player-slot';
@@ -3984,14 +3991,14 @@ const Screens = {
       if (isSource) slotClass += ' swap-source';
       if (State.swapMode && State.swapSourceId !== null && !isSource) slotClass += ' swap-target';
 
-      const clickFn = `MyTeam.openPlayerModal(${p.id})`;
+      const clickFn = `MyTeam.openPlayerModal('${p.id}')`;
 
       const swapBtn = !State.gameweekLocked
         ? isSource
           ? `<button class="swap-btn swap-btn-active" onclick="event.stopPropagation();MyTeam.cancelSwap()" title="Cancel swap">✕</button>`
           : State.swapMode
-            ? `<button class="swap-btn swap-btn-confirm" onclick="event.stopPropagation();MyTeam.confirmSwap(${p.id})" title="Swap with ${p.name}">⇄</button>`
-            : `<button class="swap-btn" onclick="event.stopPropagation();MyTeam.selectSwapSource(${p.id})" title="Swap player">⇄</button>`
+            ? `<button class="swap-btn swap-btn-confirm" onclick="event.stopPropagation();MyTeam.confirmSwap('${p.id}')" title="Swap with ${p.name}">⇄</button>`
+            : `<button class="swap-btn" onclick="event.stopPropagation();MyTeam.selectSwapSource('${p.id}')" title="Swap player">⇄</button>`
         : '';
 
       return `
@@ -4041,9 +4048,20 @@ const Screens = {
       </div>`;
     };
 
+    // Role minimums for empty slot placeholders
+    const ROLE_MIN = { WK: 1, BAT: 2, AR: 0, BOW: 0 };
     const sectionHTML = sections.map(sec => {
       const players = myPlayerIds.map(getP).filter(p => p && p.role === sec.key);
-      if (!players.length) return '';
+      const min = ROLE_MIN[sec.key] || 0;
+      const needed = Math.max(0, min - players.length);
+      // Always show section even if empty — so WK/BAT slots are always visible
+      const emptyPlaceholders = Array(needed).fill(0).map(() => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px dashed rgba(239,68,68,0.4);border-radius:var(--radius-md);margin-bottom:6px;opacity:0.75">
+          <div style="font-size:18px">${sec.icon}</div>
+          <div style="flex:1;font-size:13px;color:var(--red)">Need 1 ${sec.label.replace(/s$/,'')}</div>
+          <span class="pill pill-red" style="font-size:9px">Required</span>
+        </div>`).join('');
+      if (!players.length && needed === 0) return ''; // AR/BOW with 0 picked and no minimum — hide
       return `
       <div style="margin-bottom:20px">
         <div class="myteam-section-header">
@@ -4052,6 +4070,7 @@ const Screens = {
           <span class="myteam-section-count">${players.length}</span>
         </div>
         ${players.map(p => renderSlot(p, false)).join('')}
+        ${emptyPlaceholders}
       </div>`;
     }).join('');
 
@@ -4764,7 +4783,9 @@ const MyTeam = {
   moveToEmptyBench(slotIndex) {
     // Move the selected swap source player to the bench (empty slot)
     if (!State.swapMode || !State.swapSourceId) return;
-    const sourceId = State.swapSourceId;
+    const sourceId = String(State.swapSourceId);
+    DB.myTeam.players = (DB.myTeam.players || []).map(String);
+    DB.myTeam.bench   = (DB.myTeam.bench   || []).map(String);
     const inStarters = DB.myTeam.players.includes(sourceId);
     const inBench    = DB.myTeam.bench.includes(sourceId);
 
@@ -4788,12 +4809,13 @@ const MyTeam = {
 
   selectSwapSource(playerId) {
     if (State.gameweekLocked) return;
+    const pid = String(playerId);
     // If already in swap mode with a source, clicking the same player cancels
-    if (State.swapMode && State.swapSourceId === playerId) {
+    if (State.swapMode && State.swapSourceId === pid) {
       this.cancelSwap(); return;
     }
     State.swapMode = true;
-    State.swapSourceId = playerId;
+    State.swapSourceId = pid;
     App.render();
   },
 
@@ -4821,9 +4843,13 @@ const MyTeam = {
 
   confirmSwap(targetId) {
     if (State.gameweekLocked || !State.swapSourceId) return;
-    const sourceId = State.swapSourceId;
+    const sourceId = String(State.swapSourceId);
+    targetId = String(targetId);
     if (sourceId === targetId) { this.cancelSwap(); return; }
 
+    // Normalise all roster IDs to string for comparison
+    DB.myTeam.players = (DB.myTeam.players || []).map(String);
+    DB.myTeam.bench   = (DB.myTeam.bench   || []).map(String);
     const sourceInStarters = DB.myTeam.players.includes(sourceId);
     const sourceInBench    = DB.myTeam.bench.includes(sourceId);
     const targetInStarters = DB.myTeam.players.includes(targetId);
@@ -5694,6 +5720,7 @@ const Draft = {
       DB.myTeam.players = myPicks.slice(0, starterCount);
       DB.myTeam.bench   = myPicks.slice(starterCount);
       DB.rosters[1] = [...DB.myTeam.players, ...DB.myTeam.bench];
+      console.log('[advancePick] draft complete — myPicks:', myPicks.length, '| starters:', DB.myTeam.players.length, '| bench:', DB.myTeam.bench.length);
       // Persist roster + mark session complete
       Rosters.flush();
       if (State.draftSessionId) {
@@ -5806,6 +5833,8 @@ const Draft = {
     if (tabContentEl) {
       tabContentEl.innerHTML = Draft._tabContent(tab);
     }
+    // Re-apply role filter so it persists after every DOM update
+    if (tab === 'queue') this.applyQueueFilter();
 
     // ── 6. Update tab bar labels and active state ──
     const tabBtns = document.querySelectorAll('.draft-tab-btn');
@@ -9490,10 +9519,24 @@ const Auth = {
       if (active?.name)       DB.settings.league.name        = active.name;
     }
 
-    // Load persisted roster from Supabase (only if draft did not already set it)
-    if (active && active.id && DB.myTeam.players.length === 0) {
+    // Load persisted roster from Supabase.
+    // Also load if players array exists but contains IDs that might be stale integers.
+    const hasRealRoster = DB.myTeam.players.length > 0 &&
+      DB.myTeam.players.every(id => typeof id === 'string' && id.includes('-'));
+    if (active && active.id && !hasRealRoster) {
       const rosterData = await Rosters.load(user.id, active.id);
-      Rosters.applyToState(rosterData);
+      if (rosterData && rosterData.starters && rosterData.starters.length > 0) {
+        Rosters.applyToState(rosterData);
+      } else if (State.draftPhase === 'complete') {
+        // Draft is done but roster not saved yet — rebuild from draftPicks
+        const myPicks2 = (State.draftPicks[1] || []).filter(Boolean);
+        if (myPicks2.length > 0) {
+          const sc2 = DB.settings.league.startersCount || 11;
+          DB.myTeam.players = myPicks2.slice(0, sc2);
+          DB.myTeam.bench   = myPicks2.slice(sc2);
+          console.log('[_loadUserIntoState] rebuilt roster from draftPicks:', DB.myTeam.players.length, 'starters');
+        }
+      }
     }
 
     // ── Diagnostic logs — open DevTools Console to debug ──────────
