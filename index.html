@@ -4015,9 +4015,9 @@ const Screens = {
             <div class="pts-label">This GW</div>
           </div>
           <div class="slot-pts-divider"></div>
-          <div class="slot-pts-item">
-            <div class="pts-val" style="color:var(--text-2);font-size:15px">${seasonPts}</div>
-            <div class="pts-label">Season</div>
+          <div class="slot-pts-item" style="cursor:pointer" onclick="event.stopPropagation();MyTeam.confirmDrop('${p.id}')" title="Drop player">
+            <div style="font-size:16px;color:var(--red);opacity:0.7;transition:opacity 0.15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">🗑</div>
+            <div class="pts-label" style="color:var(--red);opacity:0.7">Drop</div>
           </div>
         </div>
       </div>`;
@@ -4756,6 +4756,25 @@ const MyTeam = {
   cancelSwap() {
     State.swapMode = false;
     State.swapSourceId = null;
+    App.render();
+  },
+
+  confirmDrop(playerId) {
+    const p = DB.players.find(pl => pl.id === playerId);
+    if (!p) return;
+    const confirmed = confirm(`Drop ${p.name} from your squad? They will become a free agent.`);
+    if (!confirmed) return;
+    // Remove from starters and bench
+    DB.myTeam.players = DB.myTeam.players.filter(id => id !== playerId);
+    DB.myTeam.bench   = DB.myTeam.bench.filter(id => id !== playerId);
+    DB.rosters[1]     = [...DB.myTeam.players, ...DB.myTeam.bench];
+    // Mark player as undrafted
+    p.drafted = false;
+    p.owner   = null;
+    // Persist to Supabase
+    const lg = State.myLeagues[State.activeLeagueIndex];
+    if (lg) Rosters.save(DB.currentUser.id, lg.id, DB.myTeam.players, DB.myTeam.bench);
+    App.toast(`🗑 ${p.name} dropped from your squad.`);
     App.render();
   },
 
@@ -7587,6 +7606,11 @@ const Trades = {
           <span style="font-size:16px">${Math.abs(diff) < 30 ? '✅' : '⚖️'}</span>
           <span style="font-size:13px;font-weight:600;color:${fairColor}">${fairness}</span>
         </div>
+        ${State.tradeMsgDraft ? `
+        <div style="padding:10px 14px;background:var(--bg-2);border-radius:var(--radius-md);border-left:3px solid var(--green);margin-bottom:12px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);margin-bottom:4px">YOUR MESSAGE</div>
+          <div style="font-size:13px;color:var(--text-1);font-style:italic">"${State.tradeMsgDraft}"</div>
+        </div>` : ''}
         <div style="font-size:12px;color:var(--text-3);line-height:1.5">
           ${targetMgr.name} will be notified and has 48 hours to respond. You'll get an alert when they accept, decline, or counter.
         </div>
@@ -7666,6 +7690,11 @@ const Trades = {
     if (State.tradeStep === 2 && (State.tradeMyOffer.length === 0 || State.tradeTheirOffer.length === 0)) {
       App.toast('Add at least one player to each side!', 'error'); return;
     }
+    // Save message before leaving step 2 (textarea removed from DOM on step 3)
+    if (State.tradeStep === 2) {
+      const msgEl = document.getElementById('trade-msg');
+      if (msgEl) State.tradeMsgDraft = msgEl.value.trim();
+    }
     State.tradeStep++;
     App.render();
   },
@@ -7736,7 +7765,8 @@ const Trades = {
 
   send() {
     const msgEl = document.getElementById('trade-msg');
-    const msg = msgEl ? msgEl.value.trim() : '';
+    const msg = msgEl ? msgEl.value.trim() : (State.tradeMsgDraft || '');
+    State.tradeMsgDraft = '';
     const targetMgr = DB.managers.find(m => m.id === State.tradeTargetManager);
     const newTrade = {
       id: DB.trades.length + 1,
