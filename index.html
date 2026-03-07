@@ -3773,42 +3773,16 @@ const Screens = {
     const bench      = DB.settings.league.benchCount;
     const totalSlots = starters + bench;
     const managers   = DB.managers;
-    const me         = managers.find(m => m.id === 1);
 
-    // Placeholder slot rows grouped by role
-    const slotGroups = [
-      { icon: '🧤', label: 'Wicket-Keeper',  count: 1  },
-      { icon: '🏏', label: 'Batters',         count: 4  },
-      { icon: '⚡', label: 'All-Rounders',    count: 2  },
-      { icon: '🏐', label: 'Bowlers',         count: 4  },
-    ];
-
-    const placeholderSlots = slotGroups.map(g => `
-      <div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-size:14px">${g.icon}</span>
-          <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3)">${g.label}</span>
-          <span style="font-size:11px;color:var(--text-3)">${g.count} slot${g.count>1?'s':''}</span>
-        </div>
-        ${Array(g.count).fill(0).map(() => `
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg-1);border:1px dashed var(--border);border-radius:var(--radius-md);margin-bottom:6px;opacity:0.7">
-            <div style="width:36px;height:36px;background:var(--bg-2);border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px">${g.icon}</div>
-            <div style="flex:1">
-              <div style="font-size:13px;color:var(--text-3);font-style:italic">Empty — awaiting draft</div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:18px;font-weight:800;color:var(--text-3)">—</div>
-              <div style="font-size:10px;color:var(--text-3)">avg pts</div>
-            </div>
-          </div>`).join('')}
-      </div>`).join('');
-
-    const benchSlots = Array(bench).fill(0).map((_, i) => `
+    const emptySlot = (label, icon = '🏏') => `
       <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg-1);border:1px dashed var(--border);border-radius:var(--radius-md);margin-bottom:6px;opacity:0.6">
-        <div style="width:36px;height:36px;background:var(--bg-2);border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px">🪑</div>
-        <div style="flex:1"><div style="font-size:13px;color:var(--text-3);font-style:italic">Bench slot ${i+1}</div></div>
+        <div style="width:36px;height:36px;background:var(--bg-2);border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px">${icon}</div>
+        <div style="flex:1"><div style="font-size:13px;color:var(--text-3);font-style:italic">${label}</div></div>
         <div style="font-size:18px;font-weight:800;color:var(--text-3)">—</div>
-      </div>`).join('');
+      </div>`;
+
+    const placeholderSlots = Array(starters).fill(0).map((_, i) => emptySlot(`Player ${i + 1} — awaiting draft`)).join('');
+    const benchSlots       = Array(bench).fill(0).map((_, i)    => emptySlot(`Bench ${i + 1}`, '🪑')).join('');
 
     if (phase === 'live') {
       // Draft is happening right now — show live status
@@ -3961,10 +3935,6 @@ const Screens = {
       return Screens._myteamEmpty();
     }
 
-    const totalSquad  = myPlayerIds.length + benchIds.length; // always constant
-    const maxBench    = DB.settings.league.benchCount || 4; // fixed bench size
-    // Always show exactly 1 empty slot as long as there are starters left to move
-    const emptyBenchSlots = myPlayerIds.length > 0 ? 1 : 0;
     const getP = id => DB.players.find(p => p.id === id);
 
     // Lineup validation
@@ -4031,37 +4001,13 @@ const Screens = {
     };
 
     // Empty bench slot — when in swap mode with a source, it becomes a valid swap target
-    const renderEmptySlot = (slotIndex) => {
-      const isTarget = State.swapMode && State.swapSourceId !== null;
-      const targetClass = isTarget ? ' swap-target empty-bench-swap-target' : '';
-      const swapBtn = !State.gameweekLocked && isTarget
-        ? `<button class="swap-btn swap-btn-confirm" onclick="event.stopPropagation();MyTeam.moveToEmptyBench(${slotIndex})" title="Move to bench">⇄</button>`
-        : '';
-      return `
-      <div class="player-slot bench-slot empty-bench-slot${targetClass}" onclick="${isTarget ? `MyTeam.moveToEmptyBench(${slotIndex})` : ''}">
-        <div class="slot-role-icon" style="background:var(--bg-3);color:var(--text-3);font-size:16px">🪑</div>
-        <div class="slot-info">
-          <div class="slot-name" style="color:var(--text-3)">Empty slot</div>
-          <div class="slot-meta"><span style="font-size:11px;color:var(--text-3)">${isTarget ? 'Click ⇄ to bench this player' : 'Swap a starter here to bench them'}</span></div>
-        </div>
-        ${swapBtn}
-        <div class="slot-pts-pair" style="opacity:0.25">
-          <div class="slot-pts-item"><div class="pts-val">—</div><div class="pts-label">This GW</div></div>
-          <div class="slot-pts-divider"></div>
-          <div class="slot-pts-item"><div class="pts-val" style="color:var(--text-2);font-size:15px">—</div><div class="pts-label">Season</div></div>
-        </div>
-      </div>`;
-    };
-
     // Flat Starting XI — all players in a single list, sorted by role for readability
     const ROLE_ORDER = { WK: 0, BAT: 1, AR: 2, BOW: 3 };
     const startingXI = [...startingPlayers].sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
     const startingXIHTML = startingXI.map(p => renderSlot(p, false)).join('');
 
-    const benchHTML = [
-      ...benchIds.map(id => renderSlot(getP(id), true)),
-      ...Array(emptyBenchSlots).fill(0).map((_, i) => renderEmptySlot(benchIds.length + i))
-    ].join('') || `<div style="text-align:center;padding:20px;color:var(--text-3);font-size:13px">
+    const benchHTML = benchIds.map(id => renderSlot(getP(id), true)).join('')
+      || `<div style="text-align:center;padding:20px;color:var(--text-3);font-size:13px">
         No bench players. Add players via the <span style="color:var(--green);cursor:pointer" onclick="App.go('waiver')">Waiver Wire</span>.
       </div>`;
 
@@ -4140,7 +4086,7 @@ const Screens = {
       <div>
         <div class="myteam-divider">
           <div class="myteam-divider-line"></div>
-          <div class="myteam-divider-label">🪑 Bench (${benchIds.length}/${maxBench})</div>
+          <div class="myteam-divider-label">🪑 Bench (${benchIds.length}/${DB.settings.league.benchCount || 4})</div>
           <div class="myteam-divider-line"></div>
         </div>
         <div class="myteam-section-wrap">
@@ -4766,33 +4712,6 @@ const MyTeam = {
     App.toast('✅ Team name updated!');
     const el = document.getElementById('team-name-display');
     if (el) el.textContent = val;
-  },
-
-  moveToEmptyBench(slotIndex) {
-    // Move the selected swap source player to the bench (empty slot)
-    if (!State.swapMode || !State.swapSourceId) return;
-    const sourceId = String(State.swapSourceId);
-    DB.myTeam.players = (DB.myTeam.players || []).map(String);
-    DB.myTeam.bench   = (DB.myTeam.bench   || []).map(String);
-    const inStarters = DB.myTeam.players.includes(sourceId);
-    const inBench    = DB.myTeam.bench.includes(sourceId);
-
-    if (inStarters) {
-      // Remove from starters, push to bench
-      DB.myTeam.players = DB.myTeam.players.filter(id => id !== sourceId);
-      DB.myTeam.bench.push(sourceId);
-    } else if (inBench) {
-      // Already on bench — just cancel (can't move bench to empty bench slot)
-      this.cancelSwap(); return;
-    }
-
-    const name = DB.players.find(p => p.id === sourceId)?.name;
-    State.swapMode = false;
-    State.swapSourceId = null;
-    // Persist starter/bench order to Supabase (fire-and-forget)
-    Rosters.flush();
-    App.toast(`🪑 ${name} moved to bench`);
-    App.render();
   },
 
   selectSwapSource(playerId) {
