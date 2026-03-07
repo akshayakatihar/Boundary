@@ -7287,6 +7287,7 @@ const Waiver = {
     State.waiverClaims = State.waiverClaims || [];
     State.waiverClaims.push({ addId, dropId: mode === 'add-drop' ? dropId : null, mode });
     this.closeClaimModal();
+    WaiverDB.saveAll();
     App.toast(mode === 'add-drop' ? '✅ Add & Drop claim queued!' : '✅ Add-only claim queued — will execute if squad has space.');
     App.render();
   },
@@ -7302,6 +7303,7 @@ const Waiver = {
   cancelClaim(index) {
     if (!State.waiverClaims) return;
     State.waiverClaims.splice(index, 1);
+    WaiverDB.saveAll();
     App.toast('Claim cancelled.');
     App.render();
   },
@@ -7311,11 +7313,13 @@ const Waiver = {
     const target = index + dir;
     if (target < 0 || target >= claims.length) return;
     [claims[index], claims[target]] = [claims[target], claims[index]];
+    WaiverDB.saveAll();
     App.render();
   },
 
   cancelAllClaims() {
     State.waiverClaims = [];
+    WaiverDB.clearAll();
     App.toast('All claims cancelled.');
     App.render();
   },
@@ -7355,6 +7359,7 @@ const Waiver = {
       processed++;
     });
     State.waiverClaims = [];
+    WaiverDB.clearAll();
     App.toast(`✅ ${processed} waiver claim${processed !== 1 ? 's' : ''} processed!`);
     App.render();
   },
@@ -9690,6 +9695,70 @@ const DraftDB = {
 // Schema: id, league_id, user_id, player_ids (int[]), bench_ids (int[]),
 //         team_name (text), updated_at (timestamptz)
 // ============================================================
+const WaiverDB = {
+
+  _memberId() {
+    const lg = State.myLeagues?.[State.activeLeagueIndex];
+    return lg?.memberId || null;
+  },
+
+  _leagueId() {
+    const lg = State.myLeagues?.[State.activeLeagueIndex];
+    return lg?.id || null;
+  },
+
+  async load() {
+    const leagueId = this._leagueId();
+    const memberId = this._memberId();
+    if (!leagueId || !memberId || !_supabase) return;
+    const { data, error } = await _supabase
+      .from('waiver_claims')
+      .select('*')
+      .eq('league_id', leagueId)
+      .eq('member_id', memberId)
+      .order('priority', { ascending: true });
+    if (error) { console.error('[WaiverDB.load]', error.message); return; }
+    State.waiverClaims = (data || []).map(row => ({
+      _supabaseId: row.id,
+      addId:   row.add_player_id,
+      dropId:  row.drop_player_id || null,
+      mode:    row.mode || 'add-only',
+    }));
+    console.log('[WaiverDB.load] loaded', State.waiverClaims.length, 'claims');
+  },
+
+  async saveAll() {
+    const leagueId = this._leagueId();
+    const memberId = this._memberId();
+    if (!leagueId || !memberId || !_supabase) return;
+    // Delete all existing claims for this member, then re-insert in order
+    await _supabase.from('waiver_claims').delete()
+      .eq('league_id', leagueId).eq('member_id', memberId);
+    const rows = State.waiverClaims.map((c, i) => ({
+      league_id:      leagueId,
+      member_id:      memberId,
+      add_player_id:  c.addId,
+      drop_player_id: c.dropId || null,
+      mode:           c.mode || 'add-only',
+      priority:       i,
+    }));
+    if (!rows.length) return;
+    const { data, error } = await _supabase.from('waiver_claims').insert(rows).select();
+    if (error) { console.error('[WaiverDB.saveAll]', error.message); return; }
+    // Update local _supabaseIds
+    (data || []).forEach((row, i) => { if (State.waiverClaims[i]) State.waiverClaims[i]._supabaseId = row.id; });
+    console.log('[WaiverDB.saveAll] saved', rows.length, 'claims');
+  },
+
+  async clearAll() {
+    const leagueId = this._leagueId();
+    const memberId = this._memberId();
+    if (!leagueId || !memberId || !_supabase) return;
+    await _supabase.from('waiver_claims').delete()
+      .eq('league_id', leagueId).eq('member_id', memberId);
+  },
+};
+
 const Rosters = {
 
   // Load the current user's roster for the active league.
@@ -9948,10 +10017,11 @@ const Auth = {
       }
     }
 
-    // ── Load all rosters + trades ──
+    // ── Load all rosters + trades + waiver claims ──
     if (active && active.id) {
       await Rosters.loadAll(active.id);
       await TradesDB.load(active.id);
+      await WaiverDB.load();
     }
     this._loadingState = false;
   },
