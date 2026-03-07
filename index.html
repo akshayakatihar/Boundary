@@ -9231,7 +9231,7 @@ const DraftDB = {
         pick_number:      pickNumber,
         picked_at:        new Date().toISOString(),
       });
-    if (error) { console.error('[DraftDB.savePick]', error.message); }
+    if (error) { console.error('[DraftDB.savePick] ERROR:', error.message); } else { console.log('[DraftDB.savePick] saved pick for memberId:', memberId, 'player:', playerId, 'round:', round); }
     return !error;
   },
 
@@ -9783,7 +9783,7 @@ const DraftRealtime = {
   resubscribePicks(sessionId) {
     if (!sessionId || !_supabase) return;
     if (this._picksChannel) _supabase.removeChannel(this._picksChannel);
-    const leagueId = State.myLeagues[State.activeLeagueIndex]?.id;
+    console.log('[resubscribePicks] subscribing to session:', sessionId);
     this._picksChannel = _supabase
       .channel(`draft_picks_${sessionId}`)
       .on('postgres_changes', {
@@ -9792,16 +9792,19 @@ const DraftRealtime = {
         table:  'draft_picks',
         filter: `draft_session_id=eq.${sessionId}`,
       }, async (payload) => {
+        console.log('[resubscribePicks] INSERT received:', JSON.stringify(payload.new));
         DraftRealtime._applyIncomingPick(payload.new);
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[resubscribePicks] channel status:', status, 'sessionId:', sessionId);
+      });
   },
 
   _applyIncomingPick(pick) {
-    if (!pick || !pick.player_id) return;
-    if (State.drafted.includes(pick.player_id)) return;
+    if (!pick || !pick.player_id) { console.warn('[_applyIncomingPick] no pick/player_id', pick); return; }
+    if (State.drafted.includes(pick.player_id)) { console.log('[_applyIncomingPick] already drafted, skipping', pick.player_id); return; }
     const mgr = DB.managers.find(m => m.memberId === pick.league_member_id);
-    if (!mgr) return;
+    if (!mgr) { console.warn('[_applyIncomingPick] no manager for memberId:', pick.league_member_id, 'known memberIds:', DB.managers.map(m=>m.memberId)); return; }
     const mgrId = mgr.id;
     const round = (pick.round || 1) - 1;
     const player = DB.players.find(p => p.id === pick.player_id);
