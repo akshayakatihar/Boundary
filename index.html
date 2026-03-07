@@ -4156,18 +4156,41 @@ const Screens = {
     const claimedAddIds  = new Set(claims.map(c => String(c.addId)));
     const claimedDropIds = new Set(claims.map(c => String(c.dropId)));
 
-    // Pending claims panel
+    // Simulate projected squad size as claims execute to flag warnings
+    const maxSquad   = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
+    let projSize = myRosterIds.length;
     const claimsHTML = claims.length === 0
-      ? `<div style="padding:14px;background:var(--bg-2);border-radius:var(--radius-md);font-size:12px;color:var(--text-3);text-align:center">No pending claims</div>`
+      ? `<div style="padding:14px;background:var(--bg-2);border-radius:var(--radius-md);font-size:12px;color:var(--text-3);text-align:center">No pending claims — click "+ Claim" on any player</div>`
       : claims.map((c, i) => {
           const addP  = DB.players.find(p => String(p.id) === String(c.addId));
-          const dropP = DB.players.find(p => String(p.id) === String(c.dropId));
-          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-2);border-radius:var(--radius-md);border:1px solid var(--border)">
-            <div style="flex:1;font-size:12px">
-              <div style="color:var(--green);font-weight:600">+ ${addP?.name || '?'} <span style="color:var(--text-3);font-size:10px">${addP ? ROLES[addP.role].icon : ''}</span></div>
-              <div style="color:var(--red);margin-top:2px">− ${dropP?.name || '?'} <span style="color:var(--text-3);font-size:10px">${dropP ? ROLES[dropP.role].icon : ''}</span></div>
+          const dropP = c.dropId ? DB.players.find(p => String(p.id) === String(c.dropId)) : null;
+          const isAddOnly = !c.dropId;
+          // Simulate execution
+          let willSkip = false;
+          if (isAddOnly) {
+            willSkip = projSize >= maxSquad;
+            if (!willSkip) projSize++;
+          } else {
+            projSize = Math.max(projSize - 1, 0) + 1; // drop one add one = net 0
+          }
+          const borderColor = willSkip ? 'rgba(239,68,68,0.4)' : isAddOnly ? 'rgba(34,197,94,0.3)' : 'rgba(99,102,241,0.3)';
+          const badge = willSkip
+            ? `<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:rgba(239,68,68,0.15);color:var(--red);font-weight:700;flex-shrink:0">⚠ Will Skip</span>`
+            : isAddOnly
+            ? `<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:rgba(34,197,94,0.15);color:var(--green);font-weight:700;flex-shrink:0">➕ Add Only</span>`
+            : `<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:rgba(99,102,241,0.15);color:#818cf8;font-weight:700;flex-shrink:0">🔄 Add & Drop</span>`;
+          return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg-2);border-radius:var(--radius-md);border:1px solid ${borderColor}">
+            <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+              <button class="btn btn-ghost" style="padding:1px 6px;font-size:11px;line-height:1" ${i === 0 ? 'disabled style="padding:1px 6px;font-size:11px;line-height:1;opacity:0.3"' : ''} onclick="Waiver.moveClaim(${i},-1)">▲</button>
+              <button class="btn btn-ghost" style="padding:1px 6px;font-size:11px;line-height:1" ${i === claims.length-1 ? 'disabled style="padding:1px 6px;font-size:11px;line-height:1;opacity:0.3"' : ''} onclick="Waiver.moveClaim(${i},1)">▼</button>
             </div>
-            <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;color:var(--red)" onclick="Waiver.cancelClaim(${i})">✕ Cancel</button>
+            <div style="font-size:11px;font-weight:800;color:var(--text-3);width:16px;text-align:center;flex-shrink:0">${i+1}</div>
+            <div style="flex:1;font-size:12px;min-width:0">
+              <div style="color:var(--green);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">+ ${addP?.name || '?'} <span style="color:var(--text-3)">${addP ? ROLES[addP.role].icon : ''}</span></div>
+              ${dropP ? `<div style="color:var(--red);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">− ${dropP.name} <span style="color:var(--text-3)">${ROLES[dropP.role].icon}</span></div>` : `<div style="color:var(--text-3);margin-top:2px;font-size:11px">No drop</div>`}
+            </div>
+            ${badge}
+            <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;color:var(--red);flex-shrink:0" onclick="Waiver.cancelClaim(${i})">✕</button>
           </div>`;
         }).join('');
 
@@ -4236,7 +4259,7 @@ const Screens = {
           </div>
           <div style="display:flex;flex-direction:column;gap:6px">${claimsHTML}</div>
           <div style="margin-top:12px;padding:10px 12px;background:var(--bg-2);border-radius:var(--radius-md);font-size:11px;color:var(--text-3);line-height:1.6">
-            ℹ️ Claims execute at midnight IST in waiver priority order. If your claim is successful, the drop happens automatically. You can queue multiple claims — they process in order listed.
+            ℹ️ Claims process in order at midnight. <strong style="color:var(--green)">Add Only</strong> claims execute if squad has space at that moment — useful when you expect space but want a fallback. <strong style="color:#818cf8">Add & Drop</strong> claims always execute if the claim wins. Use ▲▼ to reorder priority.
           </div>
         </div>
       </div>
@@ -7075,70 +7098,102 @@ const Waiver = {
          + '</div>';
   },
 
-  // Step 1: user clicks "+ Claim" on an available player → inject modal into body
+  // Step 1: user clicks "+ Claim" → two-mode modal
   startClaim(addId) {
     State._claimAddId  = String(addId);
     State._claimDropId = null;
+    State._claimMode   = 'add-only'; // 'add-only' | 'add-drop'
     const addP = DB.players.find(p => String(p.id) === State._claimAddId);
     if (!addP) return;
 
-    const myTotal  = (DB.myTeam.players || []).length + (DB.myTeam.bench || []).length;
-    const maxSquad = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
-    State._claimNeedsDrop = myTotal >= maxSquad;
+    const myTotal    = (DB.myTeam.players || []).length + (DB.myTeam.bench || []).length;
+    const maxSquad   = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
+    const spaceLeft  = maxSquad - myTotal;
+    // How many pending add-only claims are already queued?
+    const pendingAddOnly = (State.waiverClaims || []).filter(c => !c.dropId).length;
+    // Projected space after all add-only claims process
+    const projectedSpace = spaceLeft - pendingAddOnly;
 
-    // Build roster rows for drop selection
-    const myRosterIds    = [...(DB.myTeam.players || []), ...(DB.myTeam.bench || [])];
-    // Claims for same drop player ARE allowed — you may not get all of them, that's fine
-    const alreadyDropping = new Set((State.waiverClaims || []).map(c => String(c.dropId)));
-    const rowsHTML = myRosterIds.map(id => {
+    const existing = document.getElementById('waiver-claim-modal');
+    if (existing) existing.remove();
+    const modalEl = document.createElement('div');
+    modalEl.id = 'waiver-claim-modal';
+    modalEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
+    modalEl.onclick = (e) => { if (e.target === modalEl) Waiver.closeClaimModal(); };
+
+    Waiver._renderClaimModal(modalEl, addP, spaceLeft, projectedSpace);
+    document.body.appendChild(modalEl);
+  },
+
+  _buildDropRows() {
+    const myRosterIds  = [...(DB.myTeam.players || []), ...(DB.myTeam.bench || [])];
+    const alreadyDropping = new Set((State.waiverClaims || []).filter(c => c.dropId).map(c => String(c.dropId)));
+    return myRosterIds.map(id => {
       const p = DB.players.find(pl => String(pl.id) === String(id));
       if (!p) return '';
-      const pid        = String(p.id);
+      const pid = String(p.id);
       const usedAsDrop = alreadyDropping.has(pid);
-      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-2);border-radius:var(--radius-md);
-              cursor:pointer;border:2px solid transparent"
-              id="drop-option-${pid}"
-              onclick="Waiver.selectDrop('${pid}')">
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-2);border-radius:var(--radius-md);cursor:pointer;border:2px solid transparent;transition:border-color 0.15s"
+              id="drop-option-${pid}" onclick="Waiver.selectDrop('${pid}')">
         <div style="font-size:18px">${ROLES[p.role].icon}</div>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${p.name}${usedAsDrop ? ' <span style="font-size:10px;color:var(--gold)">(already in a claim)</span>' : ''}</div>
+          <div style="font-size:13px;font-weight:600">${p.name}${usedAsDrop ? ' <span style="font-size:10px;color:var(--gold)">⚠ used in another claim</span>' : ''}</div>
           <div style="font-size:11px;color:var(--text-2)">${p.team} · ${ROLES[p.role].label}</div>
         </div>
         <div style="font-size:13px;font-weight:700;color:var(--text-2);margin-right:8px">${p.pts} pts</div>
         <div id="drop-check-${pid}" style="width:20px;height:20px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;background:transparent;transition:all 0.15s"></div>
       </div>`;
     }).join('');
+  },
 
-    // Remove any existing modal, then inject fresh into body
-    const existing = document.getElementById('waiver-claim-modal');
-    if (existing) existing.remove();
+  _renderClaimModal(modalEl, addP, spaceLeft, projectedSpace) {
+    const mode       = State._claimMode || 'add-only';
+    const dropRows   = Waiver._buildDropRows();
+    const addOnlyWarn = projectedSpace <= 0
+      ? `<div style="padding:9px 12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:var(--radius-md);font-size:12px;color:var(--red);margin-bottom:10px">
+           ⚠️ Your squad will be full by then — this add-only claim will be skipped. Add a drop as fallback.
+         </div>`
+      : projectedSpace === 1
+      ? `<div style="padding:9px 12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-md);font-size:12px;color:var(--gold);margin-bottom:10px">
+           ℹ️ You only have room for 1 more add-only claim after existing ones. Consider adding a drop as fallback.
+         </div>`
+      : '';
 
-    const modalEl = document.createElement('div');
-    modalEl.id = 'waiver-claim-modal';
-    modalEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
-    modalEl.onclick = (e) => { if (e.target === modalEl) Waiver.closeClaimModal(); };
-    modalEl.innerHTML = `
-      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-xl);padding:24px;width:360px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div style="font-size:16px;font-weight:800">Claim ${addP.name}</div>
-          <button class="btn btn-ghost" style="padding:4px 8px;font-size:14px" onclick="Waiver.closeClaimModal()">✕</button>
-        </div>
-        <div style="font-size:12px;color:var(--text-2);margin-bottom:16px">
-          ${ROLES[addP.role].icon} ${addP.team} · ${ROLES[addP.role].label} · <strong style="color:var(--green)">${addP.pts} pts</strong>
-        </div>
-        ${State._claimNeedsDrop
-          ? `<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">Select player to drop if claim succeeds:</div>
-             <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:16px">${rowsHTML}</div>`
-          : `<div style="padding:12px 14px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:var(--radius-md);margin-bottom:16px;font-size:13px;color:var(--green);font-weight:600">
-               ✅ Your squad has space — no drop required!
-             </div>`
-        }
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost" style="flex:1" onclick="Waiver.closeClaimModal()">Cancel</button>
-          <button class="btn btn-primary" style="flex:1;${State._claimNeedsDrop ? 'opacity:0.4' : ''}" id="claim-confirm-btn" ${State._claimNeedsDrop ? 'disabled' : ''} onclick="Waiver.confirmClaim()">Submit Claim</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modalEl);
+    const isAddOnly   = mode === 'add-only';
+    const greenBorder = 'var(--green)';
+    const greyBorder  = 'var(--border)';
+    const addOnlyBtn  = '<button id="mode-add-only" onclick="Waiver.setClaimMode(\'add-only\')" style="padding:10px;border-radius:var(--radius-md);border:2px solid ' + (isAddOnly ? greenBorder : greyBorder) + ';background:' + (isAddOnly ? 'rgba(34,197,94,0.1)' : 'var(--bg-2)') + ';cursor:pointer;text-align:left"><div style="font-size:13px;font-weight:700;color:' + (isAddOnly ? 'var(--green)' : 'var(--text-1)') + '">➕ Add Only</div><div style="font-size:10px;color:var(--text-3);margin-top:3px">Succeeds if squad has space</div></button>';
+    const addDropBtn  = '<button id="mode-add-drop" onclick="Waiver.setClaimMode(\'add-drop\')" style="padding:10px;border-radius:var(--radius-md);border:2px solid ' + (!isAddOnly ? greenBorder : greyBorder) + ';background:' + (!isAddOnly ? 'rgba(34,197,94,0.1)' : 'var(--bg-2)') + ';cursor:pointer;text-align:left"><div style="font-size:13px;font-weight:700;color:' + (!isAddOnly ? 'var(--green)' : 'var(--text-1)') + '">🔄 Add & Drop</div><div style="font-size:10px;color:var(--text-3);margin-top:3px">Always executes if claim wins</div></button>';
+    const spaceInfo   = (DB.myTeam.players||[]).length + (DB.myTeam.bench||[]).length;
+    const maxInfo     = (DB.settings.league.startersCount||11) + (DB.settings.league.benchCount||4);
+    const afterPending = spaceLeft - ((State.waiverClaims||[]).filter(function(c){return !c.dropId;}).length);
+    const bodyHTML    = isAddOnly
+      ? addOnlyWarn + '<div style="padding:12px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:var(--radius-md);font-size:13px;color:var(--text-2);margin-bottom:16px">This claim will be processed <strong style="color:var(--text-1)">without dropping anyone</strong>. It will be skipped if your squad is full when it processes.<div style="margin-top:6px;font-size:12px;color:var(--text-3)">Squad: ' + spaceInfo + ' / ' + maxInfo + ' · Space now: ' + spaceLeft + ' · Space after pending: ' + afterPending + '</div></div>'
+      : '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">Select player to drop:</div><div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:16px">' + dropRows + '</div>';
+    const submitBtn   = '<button class="btn btn-primary" style="flex:1;' + (!isAddOnly ? 'opacity:0.4' : '') + '" id="claim-confirm-btn"' + (!isAddOnly ? ' disabled' : '') + ' onclick="Waiver.confirmClaim()">Submit Claim</button>';
+
+    modalEl.innerHTML =
+      '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-xl);padding:24px;width:380px;max-width:92vw;max-height:90vh;display:flex;flex-direction:column">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-size:16px;font-weight:800">Claim ' + addP.name + '</div><button class="btn btn-ghost" style="padding:4px 8px;font-size:14px" onclick="Waiver.closeClaimModal()">✕</button></div>'
+    + '<div style="font-size:12px;color:var(--text-2);margin-bottom:16px">' + ROLES[addP.role].icon + ' ' + addP.team + ' · ' + ROLES[addP.role].label + ' · <strong style="color:var(--green)">' + addP.pts + ' pts</strong></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">' + addOnlyBtn + addDropBtn + '</div>'
+    + bodyHTML
+    + '<div style="display:flex;gap:8px"><button class="btn btn-ghost" style="flex:1" onclick="Waiver.closeClaimModal()">Cancel</button>' + submitBtn + '</div>'
+    + '</div>';
+  },
+
+  setClaimMode(mode) {
+    State._claimMode   = mode;
+    State._claimDropId = null;
+    const addP = DB.players.find(p => String(p.id) === State._claimAddId);
+    if (!addP) return;
+    const myTotal       = (DB.myTeam.players || []).length + (DB.myTeam.bench || []).length;
+    const maxSquad      = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
+    const spaceLeft     = maxSquad - myTotal;
+    const pendingAddOnly = (State.waiverClaims || []).filter(c => !c.dropId).length;
+    const projectedSpace = spaceLeft - pendingAddOnly;
+    const modalEl = document.getElementById('waiver-claim-modal');
+    if (modalEl) Waiver._renderClaimModal(modalEl, addP, spaceLeft, projectedSpace);
   },
 
   selectDrop(dropId) {
@@ -7158,40 +7213,37 @@ const Waiver = {
   confirmClaim() {
     const addId  = State._claimAddId;
     const dropId = State._claimDropId;
-    const myTotal = (DB.myTeam.players || []).length + (DB.myTeam.bench || []).length;
-    const maxSquad = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
-    const needsDrop = myTotal >= maxSquad;
-    if (!addId || (needsDrop && !dropId)) {
+    const mode   = State._claimMode || 'add-only';
+
+    if (!addId) return;
+    if (mode === 'add-drop' && !dropId) {
       App.toast('Please select a player to drop.', 'error');
       return;
     }
 
-    // Validate resulting lineup would be legal
-    const addP  = DB.players.find(p => String(p.id) === addId);
-    const dropP = DB.players.find(p => String(p.id) === dropId);
-    if (addP && dropP) {
-      // Simulate the swap on current starters
-      const starterIds = [...(DB.myTeam.players || [])];
-      const benchIds   = [...(DB.myTeam.bench   || [])];
-      const allIds     = [...starterIds, ...benchIds]
-        .map(id => String(id) !== dropId ? id : addId); // replace drop with add
-      const allPlayers = allIds.map(id => DB.players.find(p => String(p.id) === String(id))).filter(Boolean);
-      const wkCount    = allPlayers.filter(p => p.role === 'WK').length;
-      const bowArCount = allPlayers.filter(p => p.role === 'BOW' || p.role === 'AR').length;
-      if (wkCount < 1) {
-        App.toast('❌ Claim would leave you with no Wicket-Keeper. Choose a different drop.', 'error');
-        return;
-      }
-      if (bowArCount < 5) {
-        App.toast(`❌ Claim would leave you with only ${bowArCount} Bowlers/All-Rounders (min 5). Choose a different drop.`, 'error');
-        return;
+    // Validate role legality for add-drop claims
+    if (mode === 'add-drop' && dropId) {
+      const addP  = DB.players.find(p => String(p.id) === addId);
+      const dropP = DB.players.find(p => String(p.id) === dropId);
+      if (addP && dropP) {
+        const allIds = [...(DB.myTeam.players || []), ...(DB.myTeam.bench || [])]
+          .map(id => String(id) !== dropId ? id : addId);
+        const allPlayers = allIds.map(id => DB.players.find(p => String(p.id) === String(id))).filter(Boolean);
+        if (allPlayers.filter(p => p.role === 'WK').length < 1) {
+          App.toast('❌ Claim would leave you with no Wicket-Keeper. Choose a different drop.', 'error');
+          return;
+        }
+        if (allPlayers.filter(p => p.role === 'BOW' || p.role === 'AR').length < 5) {
+          App.toast('❌ Claim would leave you with fewer than 5 Bowlers/All-Rounders. Choose a different drop.', 'error');
+          return;
+        }
       }
     }
 
     State.waiverClaims = State.waiverClaims || [];
-    State.waiverClaims.push({ addId, dropId: dropId || null });
+    State.waiverClaims.push({ addId, dropId: mode === 'add-drop' ? dropId : null, mode });
     this.closeClaimModal();
-    App.toast(dropId ? '✅ Waiver claim submitted! Processes at midnight IST.' : '✅ Waiver claim submitted! Player will be added at midnight (no drop needed).');
+    App.toast(mode === 'add-drop' ? '✅ Add & Drop claim queued!' : '✅ Add-only claim queued — will execute if squad has space.');
     App.render();
   },
 
@@ -7200,12 +7252,21 @@ const Waiver = {
     if (modal) modal.remove();
     State._claimAddId  = null;
     State._claimDropId = null;
+    State._claimMode   = null;
   },
 
   cancelClaim(index) {
     if (!State.waiverClaims) return;
     State.waiverClaims.splice(index, 1);
     App.toast('Claim cancelled.');
+    App.render();
+  },
+
+  moveClaim(index, dir) {
+    const claims = State.waiverClaims || [];
+    const target = index + dir;
+    if (target < 0 || target >= claims.length) return;
+    [claims[index], claims[target]] = [claims[target], claims[index]];
     App.render();
   },
 
@@ -7219,18 +7280,29 @@ const Waiver = {
   processClaims() {
     const claims = State.waiverClaims || [];
     if (!claims.length) { App.toast('No pending claims to process.'); return; }
+    const maxSquad = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
     let processed = 0;
     claims.forEach(c => {
       const addP  = DB.players.find(p => String(p.id) === String(c.addId));
-      const dropP = DB.players.find(p => String(p.id) === String(c.dropId));
-      if (!addP || !dropP) return;
-      // Execute: drop the player, add the new one
-      DB.myTeam.players = DB.myTeam.players.filter(id => String(id) !== String(c.dropId));
-      DB.myTeam.bench   = DB.myTeam.bench.filter(id => String(id) !== String(c.dropId));
-      DB.myTeam.bench.push(String(c.addId));
-      DB.rosters[1] = [...DB.myTeam.players, ...DB.myTeam.bench];
-      addP.drafted  = true;  addP.owner  = 1;
-      dropP.drafted = false; dropP.owner = null;
+      if (!addP) return;
+      const currentSize = (DB.myTeam.players || []).length + (DB.myTeam.bench || []).length;
+      if (!c.dropId) {
+        // Add-only claim: skip if squad full
+        if (currentSize >= maxSquad) return;
+        DB.myTeam.bench.push(String(c.addId));
+        DB.rosters[1] = [...DB.myTeam.players, ...DB.myTeam.bench];
+        addP.drafted = true; addP.owner = 1;
+      } else {
+        // Add & Drop claim
+        const dropP = DB.players.find(p => String(p.id) === String(c.dropId));
+        if (!dropP) return;
+        DB.myTeam.players = DB.myTeam.players.filter(id => String(id) !== String(c.dropId));
+        DB.myTeam.bench   = DB.myTeam.bench.filter(id => String(id) !== String(c.dropId));
+        DB.myTeam.bench.push(String(c.addId));
+        DB.rosters[1] = [...DB.myTeam.players, ...DB.myTeam.bench];
+        addP.drafted  = true;  addP.owner  = 1;
+        dropP.drafted = false; dropP.owner = null;
+      }
       // Move user to bottom of waiver priority
       const order = DB.settings.waiver.order;
       const idx = order.indexOf(1);
