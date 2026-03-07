@@ -2689,6 +2689,7 @@ const App = {
   async loadPlayers() {
     const players = await PlayersDB.fetchAll();
     if (players && players.length > 0) {
+      console.log('[loadPlayers] DB.myTeam.players at load time:', DB.myTeam.players.slice(0,3));
       DB.players = players;
       const myIds = new Set([...DB.myTeam.players, ...DB.myTeam.bench]);
       if (myIds.size > 0) {
