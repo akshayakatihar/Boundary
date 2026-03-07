@@ -7784,6 +7784,20 @@ const Trades = {
     DB.myTeam.bench = DB.myTeam.bench
       .filter(id => !t.asking.includes(id));
 
+    // Save both managers' updated rosters to Supabase
+    const lg = State.myLeagues[State.activeLeagueIndex];
+    if (lg) {
+      const otherMgr = DB.managers.find(m => m.id === t.from);
+      // Save our roster
+      Rosters.save(DB.currentUser.id, lg.id, DB.myTeam.players, DB.myTeam.bench);
+      // Save the other manager's roster
+      if (otherMgr?.userId) {
+        const theirStarters = DB.rosters[t.from].slice(0, DB.settings.league.startersCount || 11);
+        const theirBench    = DB.rosters[t.from].slice(DB.settings.league.startersCount || 11);
+        Rosters.save(otherMgr.userId, lg.id, theirStarters, theirBench);
+      }
+    }
+
     this.selectedTradeId = tradeId;
     App.toast(`✅ Trade accepted! Welcome to the team, ${t.offer.map(id => DB.players.find(p=>p.id===id)?.name?.split(' ').pop()).join(' & ')}!`);
     App.render();
