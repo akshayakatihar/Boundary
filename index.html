@@ -2774,10 +2774,7 @@ const App = {
           <span>${active.name}</span>
           <span style="font-size:12px">▼</span>
         </div>
-        const sidebarMeta = State.draftPhase === 'complete'
-          ? active.meta.replace('· Draft', '· Season Active')
-          : active.meta;
-        <div class="league-meta">${State.draftPhase === 'complete' ? '🏆' : '⏳'} ${sidebarMeta}</div>
+        <div class="league-meta">${State.draftPhase === 'complete' ? '🏆 ' + active.meta.replace('· Draft', '· Season Active') : '⏳ ' + active.meta}</div>
         <div class="league-dropdown" id="league-dropdown">
           <div class="league-dropdown-section">
             <div class="league-dropdown-header">My Leagues</div>
@@ -3386,16 +3383,29 @@ const Screens = {
       }
     }, 50);
 
+    const myMgr   = DB.managers.find(m => m.userId === DB.currentUser.id) || DB.managers[0];
+    const rec     = Results.compute();
+    const myRec   = myMgr ? (rec[myMgr.id] || {}) : {};
+    const myW     = myRec.w || myMgr?.w || 0;
+    const myL     = myRec.l || myMgr?.l || 0;
+    const myPts   = myRec.ptsFor || myMgr?.ptsFor || 0;
+    // Rank = how many managers have more wins (or more ptsFor on tie)
+    const myRank  = DB.managers.filter(m => {
+      const r = rec[m.id] || {};
+      const mW = r.w || m.w || 0;
+      const mP = r.ptsFor || m.ptsFor || 0;
+      return mW > myW || (mW === myW && mP > myPts);
+    }).length + 1;
+
     return `
     <div class="hero-banner">
       <div class="hero-league">🏆 IPL 2025 · Season Active</div>
       <div class="hero-title">${DB.league.name}</div>
-      <div class="hero-sub">Gameweek 7 · 4 matches remaining this week</div>
+      <div class="hero-sub">${myMgr ? myMgr.name + "'s XI" : 'Your team'}</div>
       <div class="hero-stats">
-        <div class="hero-stat"><div class="val">#1</div><div class="lbl">Your Rank</div></div>
-        <div class="hero-stat"><div class="val">847</div><div class="lbl">Total Pts</div></div>
-        <div class="hero-stat"><div class="val">187</div><div class="lbl">This Week</div></div>
-        <div class="hero-stat"><div class="val">8-2</div><div class="lbl">Record</div></div>
+        <div class="hero-stat"><div class="val">#${myRank}</div><div class="lbl">Your Rank</div></div>
+        <div class="hero-stat"><div class="val">${myPts}</div><div class="lbl">Total Pts</div></div>
+        <div class="hero-stat"><div class="val">${myW}-${myL}</div><div class="lbl">Record</div></div>
       </div>
     </div>
 
@@ -3404,38 +3414,30 @@ const Screens = {
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <div class="section-label" style="margin:0">This Week's Matchup</div>
-          <select class="input-field" id="matchup-selector" onchange="Home.changeMatchupWeek(this.value)" style="width:auto;padding:6px 28px 6px 12px;font-size:12px;background-image:url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%2394a3b8%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3e%3cpolyline points=%276 9 12 15 18 9%27%3e%3c/polyline%3e%3c/svg%3e');background-repeat:no-repeat;background-position:right 8px center;background-size:16px;appearance:none">
-            <option value="5">GW 5 (Previous)</option>
-            <option value="6">GW 6 (Previous)</option>
-            <option value="7" selected>GW 7 (Current)</option>
-            <option value="8">GW 8 (Upcoming)</option>
-            <option value="9">GW 9 (Upcoming)</option>
-          </select>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
           <div style="text-align:center;flex:1">
-            <div class="avatar-ring" style="width:48px;height:48px;background:var(--green-dim);border-color:var(--green);color:var(--green);font-size:20px;margin:0 auto 8px">${(DB.managers[0]?.name||'?')[0]}</div>
-            <div style="font-size:13px;font-weight:700">${DB.managers[0]?.name || 'You'}</div>
-            <div style="font-size:11px;color:var(--text-2);margin-top:2px">${DB.currentUser.teamName || DB.managers[0]?.name || ''}</div>
-            <div style="font-family:var(--font-display);font-size:28px;font-weight:800;color:var(--green);margin-top:8px" id="my-matchup-score">${State.myLiveTotal}</div>
+            <div class="avatar-ring" style="width:48px;height:48px;background:${myMgr?.bg||'var(--green-dim)'};border-color:${myMgr?.color||'var(--green)'};color:${myMgr?.color||'var(--green)'};font-size:20px;margin:0 auto 8px">${(myMgr?.name||'?')[0]}</div>
+            <div style="font-size:13px;font-weight:700">${myMgr?.name || 'You'}</div>
+            <div style="font-size:11px;color:var(--text-2);margin-top:2px">${DB.currentUser.teamName || myMgr?.name + "'s XI" || ''}</div>
+            <div style="font-family:var(--font-display);font-size:28px;font-weight:800;color:var(--green);margin-top:8px">${myPts}</div>
           </div>
           <div style="color:var(--text-3);font-weight:800;font-size:18px">VS</div>
           ${(() => {
-            const opp = DB.managers.find(m => m.id !== 1) || null;
+            const opp = DB.managers.find(m => m.userId !== DB.currentUser.id && m.memberId) || DB.managers.find(m => m !== myMgr);
+            const oppRec = opp ? (rec[opp.id] || {}) : {};
+            const oppPts = oppRec.ptsFor || opp?.ptsFor || 0;
             return opp ? `<div style="text-align:center;flex:1">
-              <div class="avatar-ring" style="width:48px;height:48px;background:${opp.bg};border-color:${opp.color};color:${opp.color};font-size:20px;margin:0 auto 8px">${opp.name[0]||'?'}</div>
+              <div class="avatar-ring" style="width:48px;height:48px;background:${opp.bg};border-color:${opp.color};color:${opp.color};font-size:20px;margin:0 auto 8px">${(opp.name||'?')[0]}</div>
               <div style="font-size:13px;font-weight:700">${opp.name}</div>
-              <div style="font-size:11px;color:var(--text-2);margin-top:2px">${DB.opponent.name || opp.name}</div>
-              <div style="font-family:var(--font-display);font-size:28px;font-weight:800;color:${opp.color};margin-top:8px" id="opp-matchup-score">${DB.opponent.pts || 0}</div>
+              <div style="font-size:11px;color:var(--text-2);margin-top:2px">${opp.name}'s XI</div>
+              <div style="font-family:var(--font-display);font-size:28px;font-weight:800;color:${opp.color};margin-top:8px">${oppPts}</div>
             </div>` : '<div style="text-align:center;flex:1;color:var(--text-3);font-size:13px">Awaiting opponent</div>';
           })()}
         </div>
         <div style="margin-top:16px">
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-bottom:6px">
-            <span>${State.myLiveTotal} pts</span><span>${DB.opponent.pts} pts</span>
-          </div>
           <div style="height:8px;background:var(--bg-2);border-radius:999px;overflow:hidden">
-            <div style="height:100%;background:var(--green);border-radius:999px;width:${Math.round(State.myLiveTotal/(State.myLiveTotal+DB.opponent.pts)*100)}%;transition:width 0.4s ease"></div>
+            <div style="height:100%;background:var(--green);border-radius:999px;width:50%;transition:width 0.4s ease"></div>
           </div>
         </div>
         <button class="btn btn-primary" style="width:100%;margin-top:16px;justify-content:center" onclick="App.go('scoring')">⚔️ View Matchup</button>
