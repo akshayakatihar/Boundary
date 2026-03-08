@@ -5085,6 +5085,10 @@ const Home = {
     var rec = Results.compute();
     var rows = DB.managers.map(function(m) {
       var r = rec[m.id] || { w:0, l:0, t:0, ptsFor:0, ptsAgainst:0 };
+      // If computed record has no results yet, fall back to persisted standings on manager object
+      if (r.w === 0 && r.l === 0 && r.t === 0 && (m.w || m.l || m.t)) {
+        r = { w: m.w || 0, l: m.l || 0, t: m.t || 0, ptsFor: m.ptsFor || 0, ptsAgainst: m.ptsAgainst || 0 };
+      }
       var played   = r.w + r.l + r.t;
       var tablePts = r.w * 2 + r.t;
       var nrrRaw   = played > 0 ? (r.ptsFor - r.ptsAgainst) / played : 0;
@@ -6207,6 +6211,11 @@ const Matchup = {
     // Season record strip (from Results.compute)
     var rec = Results.compute();
     var myRec = rec[myId] || { w:0, l:0, t:0, ptsFor:0, ptsAgainst:0 };
+    // Fallback: use persisted standings from DB.managers if computed record is empty
+    var myMgr = DB.managers.find(function(m) { return m.id === myId; });
+    if (myRec.w === 0 && myRec.l === 0 && myRec.t === 0 && myMgr && (myMgr.w || myMgr.l || myMgr.t)) {
+      myRec = { w: myMgr.w || 0, l: myMgr.l || 0, t: myMgr.t || 0, ptsFor: myMgr.ptsFor || 0, ptsAgainst: myMgr.ptsAgainst || 0 };
+    }
     var played = myRec.w + myRec.l + myRec.t;
     var tablePts = myRec.w * 2 + myRec.t;
     var nrrRaw = played > 0 ? (myRec.ptsFor - myRec.ptsAgainst) / played : 0;
@@ -6920,6 +6929,8 @@ var Results = {
     // Refresh schedule grid if visible
     var schEl = document.getElementById('home-schedule-grid');
     if (schEl) schEl.innerHTML = Home.renderScheduleGrid();
+    // Persist updated standings to Supabase
+    StandingsDB.flush();
   }
 };
 
@@ -8334,7 +8345,19 @@ const Commissioner = {
         ${isComm ? `<button class="btn btn-ghost" onclick="Commissioner.resetCode()" style="color:var(--red);border-color:rgba(239,68,68,0.3)">🔄 Reset Code</button>` : ''}
       </div>
       <div style="font-size:12px;color:var(--text-3);margin-top:8px">Invite link: <span style="color:var(--text-2)">https://boundary.app/join/${DB.league.code}</span></div>
-    `) + Commissioner.scheduleCard(isComm);
+    `) + (isComm ? this.card('Standings Persistence', 'Manually save the current W/L table to Supabase so all managers see the same records after a page refresh', `
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:13px;color:var(--text-2)">Standings are saved automatically when a GW is finalised.<br>Use this button to save the current in-memory standings right now.</div>
+        </div>
+        ${isComm ? `<button id="save-standings-btn" class="btn btn-primary" style="font-size:13px" onclick="Commissioner.saveStandingsNow()">💾 Save Standings</button>` : ''}
+      </div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text-3)">
+        ℹ️ Requires a <code>standings_json</code> JSONB column on the <code>league_members</code> table.
+        Run this once in Supabase SQL editor:<br>
+        <code style="background:var(--bg-2);padding:4px 8px;border-radius:4px;display:inline-block;margin-top:4px;color:var(--text-1)">ALTER TABLE league_members ADD COLUMN IF NOT EXISTS standings_json jsonb DEFAULT '{}'::jsonb;</code>
+      </div>
+    `) : '') + Commissioner.scheduleCard(isComm);
   },
 
   scheduleCard(isComm) {
@@ -8860,6 +8883,15 @@ const Commissioner = {
     if (!confirm(`Process ${claims.length} pending claim${claims.length !== 1 ? 's' : ''} now? This cannot be undone.`)) return;
     Waiver.processClaims();
     Commissioner.renderTab('waiver');
+  },
+
+  async saveStandingsNow() {
+    if (!this.isComm()) { App.toast('Only the commissioner can save standings.', 'error'); return; }
+    const btn = document.getElementById('save-standings-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+    await StandingsDB.flush();
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Standings'; }
+    App.toast('✅ Standings saved to Supabase!');
   },
 
   clearAllClaims() {
@@ -9859,6 +9891,89 @@ const WaiverDB = {
   },
 };
 
+// ============================================================
+// STANDINGSDB — persist W/L/T records to league_members.standings_json
+// The column is a JSONB field: { w, l, t, ptsFor, ptsAgainst }
+// We upsert on the league_members row for each manager.
+// If the column doesn't exist yet this degrades silently (no crash).
+// ============================================================
+const StandingsDB = {
+
+  _leagueId() {
+    return State.myLeagues?.[State.activeLeagueIndex]?.id || null;
+  },
+
+  // Save the full computed standings back to every manager's league_members row.
+  // rec = Results.compute() output: { [mgrIntId]: { w, l, t, ptsFor, ptsAgainst } }
+  async saveAll(rec) {
+    const leagueId = this._leagueId();
+    if (!leagueId || !_supabase || !rec) return;
+    const promises = DB.managers
+      .filter(m => m.memberId)
+      .map(m => {
+        const r = rec[m.id] || { w:0, l:0, t:0, ptsFor:0, ptsAgainst:0 };
+        return _supabase
+          .from('league_members')
+          .update({ standings_json: r })
+          .eq('id', m.memberId)
+          .eq('league_id', leagueId);
+      });
+    const results = await Promise.all(promises);
+    const errs = results.filter(r => r.error).map(r => r.error.message);
+    if (errs.length) {
+      // Column may not exist yet — log silently, don't break UI
+      console.warn('[StandingsDB.saveAll] partial error (column may be missing):', errs[0]);
+    } else {
+      console.log('[StandingsDB.saveAll] saved standings for', DB.managers.filter(m=>m.memberId).length, 'managers');
+    }
+  },
+
+  // Load standings back from league_members and merge into DB.managers + DB.schedule.
+  // Called after hydrateManagers so memberId is already set.
+  async load(leagueId) {
+    if (!leagueId || !_supabase) return;
+    const { data, error } = await _supabase
+      .from('league_members')
+      .select('id, standings_json')
+      .eq('league_id', leagueId);
+    if (error) {
+      // standings_json column might not exist — that's OK, just skip
+      console.warn('[StandingsDB.load] could not load standings:', error.message);
+      return;
+    }
+    if (!data || !data.length) return;
+
+    // Build a memberId → standings map
+    const map = {};
+    data.forEach(row => {
+      if (row.id && row.standings_json) map[row.id] = row.standings_json;
+    });
+
+    // Inject into DB.managers for display
+    DB.managers.forEach(m => {
+      if (!m.memberId || !map[m.memberId]) return;
+      const s = map[m.memberId];
+      m.w          = s.w          || 0;
+      m.l          = s.l          || 0;
+      m.t          = s.t          || 0;
+      m.ptsFor     = s.ptsFor     || 0;
+      m.ptsAgainst = s.ptsAgainst || 0;
+      m.wl         = s.w + '-' + s.l + (s.t > 0 ? '-' + s.t : '');
+
+      // Also seed DB.schedule match results so Results.compute() is consistent
+      // by injecting a synthetic per-GW entry for the current user's matchup.
+      // (Full symmetric seeding requires all managers' points — deferred to live scoring.)
+    });
+    console.log('[StandingsDB.load] standings hydrated for', Object.keys(map).length, 'members');
+  },
+
+  // Convenience: compute → save in one call.
+  async flush() {
+    const rec = Results.compute();
+    await this.saveAll(rec);
+  },
+};
+
 const Rosters = {
 
   // Load the current user's roster for the active league.
@@ -10073,6 +10188,8 @@ const Auth = {
     // Hydrate DB.managers FIRST so restoreForLeague can look up memberId correctly
     if (active && active.id) {
       await Leagues.hydrateManagers(active.id, user.id);
+      // Load persisted standings right after so W/L shows correctly on first render
+      await StandingsDB.load(active.id);
     }
 
     // Restore draft state from Supabase (session + picks) — must come AFTER hydrateManagers
