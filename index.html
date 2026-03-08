@@ -3041,7 +3041,9 @@ const App = {
     const leagueId = State.myLeagues?.[State.activeLeagueIndex]?.id;
     if (!leagueId || !_supabase) return;
     ChatDB.subscribe(leagueId, (msg) => {
+      // Read memberId fresh every time — it may not have been set at subscribe time
       const myMemberId = ChatDB._memberId();
+      if (!myMemberId) return; // not logged in yet
       if (msg.from_member_id === myMemberId) return; // ignore own messages
 
       const isLeagueMsg = !msg.to_member_id;
@@ -3052,7 +3054,10 @@ const App = {
         const chatMode = State.chatMode || 'league';
         const chatWith = State.chatWith || null;
         const viewingLeague = isLeagueMsg && chatMode === 'league';
-        const viewingDM     = isDMForMe  && chatMode === 'dm' && msg.from_member_id === chatWith;
+        // A DM is "for this view" if we're in DM mode with this person,
+        // regardless of send direction (from them OR to them that we sent)
+        const viewingDM = isDMForMe && chatMode === 'dm' &&
+          (msg.from_member_id === chatWith || msg.to_member_id === chatWith);
 
         if (viewingLeague || viewingDM) {
           const el = document.getElementById('chat-messages');
@@ -10193,6 +10198,8 @@ const Auth = {
       await WaiverDB.load();
     }
     this._loadingState = false;
+    // (Re)start global chat subscription now that memberId is guaranteed populated
+    App._startGlobalChatSubscription();
   },
 
   setMode(mode) {
