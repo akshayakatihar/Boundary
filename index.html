@@ -2381,6 +2381,10 @@ a { text-decoration: none; color: inherit; }
     <header id="top-bar">
       <div class="top-bar-title" id="page-title">League Hub</div>
       <div class="top-bar-actions">
+        <button class="btn-icon" id="chat-btn" onclick="App.openChat()" title="League Chat" style="position:relative">
+          💬
+          <span class="notif-badge" id="chat-badge" style="display:none">0</span>
+        </button>
         <button class="btn-icon" onclick="App.toggleNotif()" title="Notifications">
           🔔
           <span class="notif-badge">3</span>
@@ -2643,6 +2647,9 @@ const State = {
   draftShowTaken: false,
   matchupWeek: 7,
   draftPhase: 'pre',        // 'pre' | 'live' | 'complete'
+  unreadChat: 0,   // unread league chat messages while modal is closed
+  unreadDM:   0,   // unread DMs while modal is closed
+  chatOpen:   false, // true while chat modal is visible
 };
 
 const TEAM_COLORS = {
@@ -2923,6 +2930,7 @@ const App = {
   },
 
   closeModal() {
+    State.chatOpen = false;
     ChatDB.unsubscribe();
     const m = document.getElementById('modal-backdrop');
     if (m) m.remove();
@@ -2955,43 +2963,15 @@ const App = {
   },
 
   openChat() {
+    State.chatOpen = true;
+    // Clear unread counts and hide badge when chat is opened
+    State.unreadChat = 0;
+    State.unreadDM   = 0;
+    App._updateChatBadge();
     this.showModal('chat');
-    // Load messages and subscribe realtime after modal renders
+    // Load messages after modal renders; subscription is managed globally
     setTimeout(async () => {
-      const leagueId = State.myLeagues?.[State.activeLeagueIndex]?.id;
-      if (leagueId) {
-        await Modals.loadAndRenderMessages();
-        // Subscribe to new messages — append to chat without full re-render
-        ChatDB.subscribe(leagueId, (msg) => {
-          const myMemberId = ChatDB._memberId();
-          const chatMode   = State.chatMode || 'league';
-          const chatWith   = State.chatWith || null;
-          // Only show if it matches current view
-          const isLeague   = !msg.to_member_id && chatMode === 'league';
-          const isDM       = msg.to_member_id && chatMode === 'dm' &&
-            (msg.from_member_id === chatWith || msg.to_member_id === chatWith);
-          if (!isLeague && !isDM) return;
-          // Skip if it's my own message (already shown optimistically)
-          if (msg.from_member_id === myMemberId) return;
-          const el = document.getElementById('chat-messages');
-          if (!el) return;
-          const mgr   = ChatDB.memberToManager(msg.from_member_id);
-          const name  = mgr?.name || 'Unknown';
-          const color = mgr?.color || 'var(--text-2)';
-          const bg    = mgr?.bg    || 'var(--bg-2)';
-          const time  = ChatDB.formatTime(msg.created_at);
-          const div   = document.createElement('div');
-          div.style.cssText = 'display:flex;gap:8px';
-          div.innerHTML = `
-            <div class="avatar-ring" style="width:28px;height:28px;background:${bg};border-color:${color};color:${color};font-size:11px;flex-shrink:0;align-self:flex-end">${name[0]}</div>
-            <div style="max-width:72%">
-              <div style="font-size:10px;color:var(--text-3);margin-bottom:3px">${name} · ${time}</div>
-              <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;line-height:1.5;word-break:break-word">${msg.body}</div>
-            </div>`;
-          el.appendChild(div);
-          el.scrollTop = el.scrollHeight;
-        });
-      }
+      await Modals.loadAndRenderMessages();
     }, 50);
   },
 
@@ -4416,7 +4396,13 @@ const Modals = {
 
   switchChatMode(mode) {
     State.chatMode = mode;
-    if (mode === 'league') State.chatWith = null;
+    if (mode === 'league') {
+      State.chatWith   = null;
+      State.unreadChat = 0;
+    } else {
+      State.unreadDM = 0;
+    }
+    App._updateChatBadge();
     // Re-render header by reopening, then reload messages
     App.closeModal();
     App.openChat();
@@ -4457,8 +4443,10 @@ const Modals = {
   },
 
   openDM(memberId) {
-    State.chatMode = 'dm';
-    State.chatWith = memberId; // now stores memberId not manager int id
+    State.chatMode   = 'dm';
+    State.chatWith   = memberId;
+    State.unreadDM   = 0;
+    App._updateChatBadge();
     App.closeModal();
     App.openChat();
   },
@@ -5085,10 +5073,6 @@ const Home = {
     var rec = Results.compute();
     var rows = DB.managers.map(function(m) {
       var r = rec[m.id] || { w:0, l:0, t:0, ptsFor:0, ptsAgainst:0 };
-      // If computed record has no results yet, fall back to persisted standings on manager object
-      if (r.w === 0 && r.l === 0 && r.t === 0 && (m.w || m.l || m.t)) {
-        r = { w: m.w || 0, l: m.l || 0, t: m.t || 0, ptsFor: m.ptsFor || 0, ptsAgainst: m.ptsAgainst || 0 };
-      }
       var played   = r.w + r.l + r.t;
       var tablePts = r.w * 2 + r.t;
       var nrrRaw   = played > 0 ? (r.ptsFor - r.ptsAgainst) / played : 0;
@@ -6211,11 +6195,6 @@ const Matchup = {
     // Season record strip (from Results.compute)
     var rec = Results.compute();
     var myRec = rec[myId] || { w:0, l:0, t:0, ptsFor:0, ptsAgainst:0 };
-    // Fallback: use persisted standings from DB.managers if computed record is empty
-    var myMgr = DB.managers.find(function(m) { return m.id === myId; });
-    if (myRec.w === 0 && myRec.l === 0 && myRec.t === 0 && myMgr && (myMgr.w || myMgr.l || myMgr.t)) {
-      myRec = { w: myMgr.w || 0, l: myMgr.l || 0, t: myMgr.t || 0, ptsFor: myMgr.ptsFor || 0, ptsAgainst: myMgr.ptsAgainst || 0 };
-    }
     var played = myRec.w + myRec.l + myRec.t;
     var tablePts = myRec.w * 2 + myRec.t;
     var nrrRaw = played > 0 ? (myRec.ptsFor - myRec.ptsAgainst) / played : 0;
@@ -6929,8 +6908,6 @@ var Results = {
     // Refresh schedule grid if visible
     var schEl = document.getElementById('home-schedule-grid');
     if (schEl) schEl.innerHTML = Home.renderScheduleGrid();
-    // Persist updated standings to Supabase
-    StandingsDB.flush();
   }
 };
 
@@ -8345,19 +8322,7 @@ const Commissioner = {
         ${isComm ? `<button class="btn btn-ghost" onclick="Commissioner.resetCode()" style="color:var(--red);border-color:rgba(239,68,68,0.3)">🔄 Reset Code</button>` : ''}
       </div>
       <div style="font-size:12px;color:var(--text-3);margin-top:8px">Invite link: <span style="color:var(--text-2)">https://boundary.app/join/${DB.league.code}</span></div>
-    `) + (isComm ? this.card('Standings Persistence', 'Manually save the current W/L table to Supabase so all managers see the same records after a page refresh', `
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <div>
-          <div style="font-size:13px;color:var(--text-2)">Standings are saved automatically when a GW is finalised.<br>Use this button to save the current in-memory standings right now.</div>
-        </div>
-        ${isComm ? `<button id="save-standings-btn" class="btn btn-primary" style="font-size:13px" onclick="Commissioner.saveStandingsNow()">💾 Save Standings</button>` : ''}
-      </div>
-      <div style="margin-top:12px;font-size:12px;color:var(--text-3)">
-        ℹ️ Requires a <code>standings_json</code> JSONB column on the <code>league_members</code> table.
-        Run this once in Supabase SQL editor:<br>
-        <code style="background:var(--bg-2);padding:4px 8px;border-radius:4px;display:inline-block;margin-top:4px;color:var(--text-1)">ALTER TABLE league_members ADD COLUMN IF NOT EXISTS standings_json jsonb DEFAULT '{}'::jsonb;</code>
-      </div>
-    `) : '') + Commissioner.scheduleCard(isComm);
+    `) + Commissioner.scheduleCard(isComm);
   },
 
   scheduleCard(isComm) {
@@ -8883,15 +8848,6 @@ const Commissioner = {
     if (!confirm(`Process ${claims.length} pending claim${claims.length !== 1 ? 's' : ''} now? This cannot be undone.`)) return;
     Waiver.processClaims();
     Commissioner.renderTab('waiver');
-  },
-
-  async saveStandingsNow() {
-    if (!this.isComm()) { App.toast('Only the commissioner can save standings.', 'error'); return; }
-    const btn = document.getElementById('save-standings-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
-    await StandingsDB.flush();
-    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Standings'; }
-    App.toast('✅ Standings saved to Supabase!');
   },
 
   clearAllClaims() {
@@ -9891,89 +9847,6 @@ const WaiverDB = {
   },
 };
 
-// ============================================================
-// STANDINGSDB — persist W/L/T records to league_members.standings_json
-// The column is a JSONB field: { w, l, t, ptsFor, ptsAgainst }
-// We upsert on the league_members row for each manager.
-// If the column doesn't exist yet this degrades silently (no crash).
-// ============================================================
-const StandingsDB = {
-
-  _leagueId() {
-    return State.myLeagues?.[State.activeLeagueIndex]?.id || null;
-  },
-
-  // Save the full computed standings back to every manager's league_members row.
-  // rec = Results.compute() output: { [mgrIntId]: { w, l, t, ptsFor, ptsAgainst } }
-  async saveAll(rec) {
-    const leagueId = this._leagueId();
-    if (!leagueId || !_supabase || !rec) return;
-    const promises = DB.managers
-      .filter(m => m.memberId)
-      .map(m => {
-        const r = rec[m.id] || { w:0, l:0, t:0, ptsFor:0, ptsAgainst:0 };
-        return _supabase
-          .from('league_members')
-          .update({ standings_json: r })
-          .eq('id', m.memberId)
-          .eq('league_id', leagueId);
-      });
-    const results = await Promise.all(promises);
-    const errs = results.filter(r => r.error).map(r => r.error.message);
-    if (errs.length) {
-      // Column may not exist yet — log silently, don't break UI
-      console.warn('[StandingsDB.saveAll] partial error (column may be missing):', errs[0]);
-    } else {
-      console.log('[StandingsDB.saveAll] saved standings for', DB.managers.filter(m=>m.memberId).length, 'managers');
-    }
-  },
-
-  // Load standings back from league_members and merge into DB.managers + DB.schedule.
-  // Called after hydrateManagers so memberId is already set.
-  async load(leagueId) {
-    if (!leagueId || !_supabase) return;
-    const { data, error } = await _supabase
-      .from('league_members')
-      .select('id, standings_json')
-      .eq('league_id', leagueId);
-    if (error) {
-      // standings_json column might not exist — that's OK, just skip
-      console.warn('[StandingsDB.load] could not load standings:', error.message);
-      return;
-    }
-    if (!data || !data.length) return;
-
-    // Build a memberId → standings map
-    const map = {};
-    data.forEach(row => {
-      if (row.id && row.standings_json) map[row.id] = row.standings_json;
-    });
-
-    // Inject into DB.managers for display
-    DB.managers.forEach(m => {
-      if (!m.memberId || !map[m.memberId]) return;
-      const s = map[m.memberId];
-      m.w          = s.w          || 0;
-      m.l          = s.l          || 0;
-      m.t          = s.t          || 0;
-      m.ptsFor     = s.ptsFor     || 0;
-      m.ptsAgainst = s.ptsAgainst || 0;
-      m.wl         = s.w + '-' + s.l + (s.t > 0 ? '-' + s.t : '');
-
-      // Also seed DB.schedule match results so Results.compute() is consistent
-      // by injecting a synthetic per-GW entry for the current user's matchup.
-      // (Full symmetric seeding requires all managers' points — deferred to live scoring.)
-    });
-    console.log('[StandingsDB.load] standings hydrated for', Object.keys(map).length, 'members');
-  },
-
-  // Convenience: compute → save in one call.
-  async flush() {
-    const rec = Results.compute();
-    await this.saveAll(rec);
-  },
-};
-
 const Rosters = {
 
   // Load the current user's roster for the active league.
@@ -10188,8 +10061,6 @@ const Auth = {
     // Hydrate DB.managers FIRST so restoreForLeague can look up memberId correctly
     if (active && active.id) {
       await Leagues.hydrateManagers(active.id, user.id);
-      // Load persisted standings right after so W/L shows correctly on first render
-      await StandingsDB.load(active.id);
     }
 
     // Restore draft state from Supabase (session + picks) — must come AFTER hydrateManagers
@@ -10476,9 +10347,76 @@ const Auth = {
     // Subscribe to real-time draft events (session start + live picks)
     const activeLg = State.myLeagues[State.activeLeagueIndex];
     if (activeLg) DraftRealtime.subscribe(activeLg.id);
+    // Start persistent background chat subscription for live messages + badge
+    App._startGlobalChatSubscription();
     if (State.isNewUser) {
       setTimeout(() => Onboarding.show(), 600);
     }
+  },
+
+  // Update the 💬 badge in the top bar based on unread counts
+  _updateChatBadge() {
+    const badge = document.getElementById('chat-badge');
+    if (!badge) return;
+    const total = (State.unreadChat || 0) + (State.unreadDM || 0);
+    if (total > 0) {
+      badge.textContent = total > 9 ? '9+' : total;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  },
+
+  // Persistent realtime subscription that stays alive for the whole session.
+  // Handles both live-appending to the open chat modal AND badge increments.
+  _startGlobalChatSubscription() {
+    const leagueId = State.myLeagues?.[State.activeLeagueIndex]?.id;
+    if (!leagueId || !_supabase) return;
+    // Re-use ChatDB.subscribe — it removes any old channel first
+    ChatDB.subscribe(leagueId, (msg) => {
+      const myMemberId = ChatDB._memberId();
+      // Ignore own messages (already shown optimistically)
+      if (msg.from_member_id === myMemberId) return;
+
+      const isLeagueMsg = !msg.to_member_id;
+      const isDMForMe   = msg.to_member_id === myMemberId;
+      if (!isLeagueMsg && !isDMForMe) return; // not for us
+
+      if (State.chatOpen) {
+        // Modal is open — append directly if the message matches current view
+        const chatMode = State.chatMode || 'league';
+        const chatWith = State.chatWith || null;
+        const viewingLeague = isLeagueMsg && chatMode === 'league';
+        const viewingDM     = isDMForMe  && chatMode === 'dm' && msg.from_member_id === chatWith;
+
+        if (viewingLeague || viewingDM) {
+          const el = document.getElementById('chat-messages');
+          if (el) {
+            const mgr   = ChatDB.memberToManager(msg.from_member_id);
+            const name  = mgr?.name  || 'Unknown';
+            const color = mgr?.color || 'var(--text-2)';
+            const bg    = mgr?.bg    || 'var(--bg-2)';
+            const time  = ChatDB.formatTime(msg.created_at);
+            const div   = document.createElement('div');
+            div.style.cssText = 'display:flex;gap:8px';
+            div.innerHTML = `
+              <div class="avatar-ring" style="width:28px;height:28px;background:${bg};border-color:${color};color:${color};font-size:11px;flex-shrink:0;align-self:flex-end">${name[0]}</div>
+              <div style="max-width:72%">
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:3px">${name} · ${time}</div>
+                <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;line-height:1.5;word-break:break-word">${msg.body}</div>
+              </div>`;
+            el.appendChild(div);
+            el.scrollTop = el.scrollHeight;
+          }
+          return; // shown in modal — no badge needed
+        }
+      }
+
+      // Modal closed or viewing a different thread — increment badge
+      if (isLeagueMsg) State.unreadChat = (State.unreadChat || 0) + 1;
+      else             State.unreadDM   = (State.unreadDM   || 0) + 1;
+      App._updateChatBadge();
+    });
   },
 };
 
