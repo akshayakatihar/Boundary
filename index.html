@@ -2774,7 +2774,10 @@ const App = {
           <span>${active.name}</span>
           <span style="font-size:12px">▼</span>
         </div>
-        <div class="league-meta">⏳ ${active.meta}</div>
+        const sidebarMeta = State.draftPhase === 'complete'
+          ? active.meta.replace('· Draft', '· Season Active')
+          : active.meta;
+        <div class="league-meta">${State.draftPhase === 'complete' ? '🏆' : '⏳'} ${sidebarMeta}</div>
         <div class="league-dropdown" id="league-dropdown">
           <div class="league-dropdown-section">
             <div class="league-dropdown-header">My Leagues</div>
@@ -3369,9 +3372,11 @@ const Screens = {
   },
 
   home() {
-    if (!State.hasLeague)   return Screens._homeEmpty();
-    if (State.newLeague)    return Screens._homeNewLeague();
-    if (State.joinedLeague) return Screens._homeJoinedLeague();
+    // If draft is complete, always show the full league hub regardless of league type
+    const draftDone = State.draftPhase === 'complete';
+    if (!State.hasLeague)              return Screens._homeEmpty();
+    if (!draftDone && State.newLeague)    return Screens._homeNewLeague();
+    if (!draftDone && State.joinedLeague) return Screens._homeJoinedLeague();
 
     setTimeout(() => {
       // Initialize matchup dropdown if needed
