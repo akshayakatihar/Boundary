@@ -3025,7 +3025,69 @@ const App = {
   initLiveScore() {
     State.myLiveTotal = Object.values(DB.myTeam.livePoints||{}).reduce((a,b)=>a+b,0);
     State.events = []; // populated from live scoring feed
-  }
+  },
+
+  // Update the 💬 badge in the top bar based on unread counts
+  _updateChatBadge() {
+    const badge = document.getElementById('chat-badge');
+    if (!badge) return;
+    const total = (State.unreadChat || 0) + (State.unreadDM || 0);
+    if (total > 0) {
+      badge.textContent = total > 9 ? '9+' : total;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  },
+
+  // Persistent realtime subscription that stays alive for the whole session.
+  // Handles both live-appending to the open chat modal AND badge increments.
+  _startGlobalChatSubscription() {
+    const leagueId = State.myLeagues?.[State.activeLeagueIndex]?.id;
+    if (!leagueId || !_supabase) return;
+    ChatDB.subscribe(leagueId, (msg) => {
+      const myMemberId = ChatDB._memberId();
+      if (msg.from_member_id === myMemberId) return; // ignore own messages
+
+      const isLeagueMsg = !msg.to_member_id;
+      const isDMForMe   = msg.to_member_id === myMemberId;
+      if (!isLeagueMsg && !isDMForMe) return; // not for us
+
+      if (State.chatOpen) {
+        const chatMode = State.chatMode || 'league';
+        const chatWith = State.chatWith || null;
+        const viewingLeague = isLeagueMsg && chatMode === 'league';
+        const viewingDM     = isDMForMe  && chatMode === 'dm' && msg.from_member_id === chatWith;
+
+        if (viewingLeague || viewingDM) {
+          const el = document.getElementById('chat-messages');
+          if (el) {
+            const mgr   = ChatDB.memberToManager(msg.from_member_id);
+            const name  = mgr?.name  || 'Unknown';
+            const color = mgr?.color || 'var(--text-2)';
+            const bg    = mgr?.bg    || 'var(--bg-2)';
+            const time  = ChatDB.formatTime(msg.created_at);
+            const div   = document.createElement('div');
+            div.style.cssText = 'display:flex;gap:8px';
+            div.innerHTML = `
+              <div class="avatar-ring" style="width:28px;height:28px;background:${bg};border-color:${color};color:${color};font-size:11px;flex-shrink:0;align-self:flex-end">${name[0]}</div>
+              <div style="max-width:72%">
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:3px">${name} · ${time}</div>
+                <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;line-height:1.5;word-break:break-word">${msg.body}</div>
+              </div>`;
+            el.appendChild(div);
+            el.scrollTop = el.scrollHeight;
+          }
+          return; // shown in modal — no badge needed
+        }
+      }
+
+      // Modal closed or viewing a different thread — increment badge
+      if (isLeagueMsg) State.unreadChat = (State.unreadChat || 0) + 1;
+      else             State.unreadDM   = (State.unreadDM   || 0) + 1;
+      App._updateChatBadge();
+    });
+  },
 };
 
 // ============================================================
@@ -10352,71 +10414,6 @@ const Auth = {
     if (State.isNewUser) {
       setTimeout(() => Onboarding.show(), 600);
     }
-  },
-
-  // Update the 💬 badge in the top bar based on unread counts
-  _updateChatBadge() {
-    const badge = document.getElementById('chat-badge');
-    if (!badge) return;
-    const total = (State.unreadChat || 0) + (State.unreadDM || 0);
-    if (total > 0) {
-      badge.textContent = total > 9 ? '9+' : total;
-      badge.style.display = 'flex';
-    } else {
-      badge.style.display = 'none';
-    }
-  },
-
-  // Persistent realtime subscription that stays alive for the whole session.
-  // Handles both live-appending to the open chat modal AND badge increments.
-  _startGlobalChatSubscription() {
-    const leagueId = State.myLeagues?.[State.activeLeagueIndex]?.id;
-    if (!leagueId || !_supabase) return;
-    // Re-use ChatDB.subscribe — it removes any old channel first
-    ChatDB.subscribe(leagueId, (msg) => {
-      const myMemberId = ChatDB._memberId();
-      // Ignore own messages (already shown optimistically)
-      if (msg.from_member_id === myMemberId) return;
-
-      const isLeagueMsg = !msg.to_member_id;
-      const isDMForMe   = msg.to_member_id === myMemberId;
-      if (!isLeagueMsg && !isDMForMe) return; // not for us
-
-      if (State.chatOpen) {
-        // Modal is open — append directly if the message matches current view
-        const chatMode = State.chatMode || 'league';
-        const chatWith = State.chatWith || null;
-        const viewingLeague = isLeagueMsg && chatMode === 'league';
-        const viewingDM     = isDMForMe  && chatMode === 'dm' && msg.from_member_id === chatWith;
-
-        if (viewingLeague || viewingDM) {
-          const el = document.getElementById('chat-messages');
-          if (el) {
-            const mgr   = ChatDB.memberToManager(msg.from_member_id);
-            const name  = mgr?.name  || 'Unknown';
-            const color = mgr?.color || 'var(--text-2)';
-            const bg    = mgr?.bg    || 'var(--bg-2)';
-            const time  = ChatDB.formatTime(msg.created_at);
-            const div   = document.createElement('div');
-            div.style.cssText = 'display:flex;gap:8px';
-            div.innerHTML = `
-              <div class="avatar-ring" style="width:28px;height:28px;background:${bg};border-color:${color};color:${color};font-size:11px;flex-shrink:0;align-self:flex-end">${name[0]}</div>
-              <div style="max-width:72%">
-                <div style="font-size:10px;color:var(--text-3);margin-bottom:3px">${name} · ${time}</div>
-                <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:12px 12px 12px 2px;padding:9px 12px;font-size:13px;line-height:1.5;word-break:break-word">${msg.body}</div>
-              </div>`;
-            el.appendChild(div);
-            el.scrollTop = el.scrollHeight;
-          }
-          return; // shown in modal — no badge needed
-        }
-      }
-
-      // Modal closed or viewing a different thread — increment badge
-      if (isLeagueMsg) State.unreadChat = (State.unreadChat || 0) + 1;
-      else             State.unreadDM   = (State.unreadDM   || 0) + 1;
-      App._updateChatBadge();
-    });
   },
 };
 
