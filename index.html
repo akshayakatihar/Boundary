@@ -2358,8 +2358,9 @@ a { text-decoration: none; color: inherit; }
       </div>
     </nav>
     <div class="sidebar-footer">
-      <button class="btn btn-secondary" onclick="App.openChat()" style="width:100%;margin-bottom:12px;justify-content:center;gap:8px">
+      <button class="btn btn-secondary" onclick="App.openChat()" style="width:100%;margin-bottom:12px;justify-content:center;gap:8px;position:relative">
         💬 League Chat
+        <span id="chat-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:999px;font-size:9px;font-weight:700;padding:2px 6px;min-width:18px;text-align:center;border:2px solid var(--bg-1)">0</span>
       </button>
       <div style="display:flex;align-items:center;gap:8px">
         <div class="user-chip" style="flex:1;min-width:0" id="sidebar-user-chip">
@@ -2381,19 +2382,12 @@ a { text-decoration: none; color: inherit; }
     <header id="top-bar">
       <div class="top-bar-title" id="page-title">League Hub</div>
       <div class="top-bar-actions">
-        <button class="btn-icon" id="chat-btn" onclick="App.openChat()" title="League Chat" style="position:relative">
-          💬
-          <span class="notif-badge" id="chat-badge" style="display:none">0</span>
-        </button>
         <button class="btn-icon" onclick="App.toggleNotif()" title="Notifications">
           🔔
           <span class="notif-badge">3</span>
         </button>
         <button class="btn-icon" onclick="App.showModal('scoring-rules')" title="Scoring Rules">
           📋
-        </button>
-        <button class="btn-icon" onclick="App.downloadCleanFile()" title="Download latest version" style="font-size:13px">
-          ⬇️
         </button>
       </div>
     </header>
@@ -2931,7 +2925,8 @@ const App = {
 
   closeModal() {
     State.chatOpen = false;
-    ChatDB.unsubscribe();
+    // Do NOT unsubscribe here — the global chat subscription managed by
+    // App._startGlobalChatSubscription() must stay alive for badge counts.
     const m = document.getElementById('modal-backdrop');
     if (m) m.remove();
   },
@@ -4465,9 +4460,19 @@ const Modals = {
       State.unreadDM = 0;
     }
     App._updateChatBadge();
-    // Re-render header by reopening, then reload messages
-    App.closeModal();
-    App.openChat();
+    // Swap header title and reload messages in-place — no modal close/reopen
+    const titleEl = document.querySelector('#modal-backdrop .modal-title');
+    const subEl   = document.querySelector('#modal-backdrop .modal-title + div');
+    const leagueName = State.myLeagues?.[State.activeLeagueIndex]?.name || 'League Chat';
+    if (titleEl) titleEl.textContent = '💬 ' + (mode === 'league' ? 'League Chat' : 'Direct Message');
+    if (subEl)   subEl.textContent   = mode === 'league' ? leagueName : '';
+    // Update active button styles
+    document.querySelectorAll('#modal-backdrop .btn').forEach(b => {
+      const isLeagueBtn = b.textContent.trim().startsWith('👥');
+      const isDMBtn     = !isLeagueBtn;
+      if (isLeagueBtn) { b.className = 'btn ' + (mode === 'league' ? 'btn-primary' : 'btn-ghost'); }
+    });
+    Modals.loadAndRenderMessages();
   },
 
   showDMSelector() {
@@ -4509,8 +4514,22 @@ const Modals = {
     State.chatWith   = memberId;
     State.unreadDM   = 0;
     App._updateChatBadge();
-    App.closeModal();
-    App.openChat();
+    const partner    = DB.managers.find(m => m.memberId === memberId);
+    // Swap header title in-place
+    const titleEl = document.querySelector('#modal-backdrop .modal-title');
+    const subEl   = document.querySelector('#modal-backdrop .modal-title + div');
+    if (titleEl) titleEl.textContent = '💬 Direct Message';
+    if (subEl)   subEl.textContent   = partner?.name || '';
+    // Update button active states
+    document.querySelectorAll('#modal-backdrop .btn').forEach(b => {
+      const txt = b.textContent.trim();
+      const isThis = txt === (partner?.name?.split(' ')[0] || '');
+      const isLeague = txt.startsWith('👥');
+      if (isLeague || isThis) {
+        b.className = 'btn ' + ((isThis && !isLeague) ? 'btn-primary' : 'btn-ghost');
+      }
+    });
+    Modals.loadAndRenderMessages();
   },
 
   async sendChatMessage() {
