@@ -2384,7 +2384,7 @@ a { text-decoration: none; color: inherit; }
       <div class="top-bar-actions">
         <button class="btn-icon" onclick="App.toggleNotif()" title="Notifications">
           🔔
-          <span class="notif-badge">3</span>
+          <span class="notif-badge" id="notif-badge-count" style="display:none">0</span>
         </button>
         <button class="btn-icon" onclick="App.showModal('scoring-rules')" title="Scoring Rules">
           📋
@@ -2429,28 +2429,10 @@ a { text-decoration: none; color: inherit; }
 <div id="notif-panel">
   <div class="notif-header">
     Notifications
-    <button class="btn-ghost" style="padding:4px 10px;font-size:12px" onclick="document.getElementById(&#39;notif-panel&#39;).style.display=&#39;none&#39;">✕</button>
+    <button class="btn-ghost" style="padding:4px 10px;font-size:12px" onclick="App.closeNotif()">✕</button>
   </div>
-  <div class="notif-item">
-    <div class="notif-dot"></div>
-    <div>
-      <div class="notif-text"><strong>Virat Kohli</strong> scored 85 runs · +135 pts 🔥</div>
-      <div class="notif-time">2 min ago</div>
-    </div>
-  </div>
-  <div class="notif-item">
-    <div class="notif-dot"></div>
-    <div>
-      <div class="notif-text"><strong>Jasprit Bumrah</strong> took 3 wickets · +170 pts</div>
-      <div class="notif-time">18 min ago</div>
-    </div>
-  </div>
-  <div class="notif-item">
-    <div class="notif-dot" style="background:var(--gold)"></div>
-    <div>
-      <div class="notif-text">Draft starts in <strong>2 hours!</strong> Get your watchlist ready 🏏</div>
-      <div class="notif-time">1 hr ago</div>
-    </div>
+  <div id="notif-list">
+    <div style="padding:24px 16px;text-align:center;color:var(--text-3);font-size:13px">Loading…</div>
   </div>
 </div>
 
@@ -2901,6 +2883,13 @@ const App = {
     const p = document.getElementById('notif-panel');
     State.notifOpen = !State.notifOpen;
     p.style.display = State.notifOpen ? 'block' : 'none';
+    if (State.notifOpen) NotifDB.loadAndRender();
+  },
+
+  closeNotif() {
+    State.notifOpen = false;
+    const p = document.getElementById('notif-panel');
+    if (p) p.style.display = 'none';
   },
 
   // Downloads the current page as a clean HTML file — strips Chrome's
@@ -7541,6 +7530,7 @@ const Waiver = {
     const claimedThisRun = new Set(); // players awarded this run — can't be claimed twice
     const rosterUpdates  = {};        // user_id → final roster to write back
     const processedIds   = [];        // claim row ids to delete from Supabase
+    const notifResults   = [];        // for writing notifications after processing
     let processed = 0;
     let skipped   = 0;
 
@@ -7594,6 +7584,10 @@ const Waiver = {
         DB.rosters[mgr.id] = [...roster.starters, ...roster.bench];
       }
 
+      // Track for notifications
+      const dropPName = dropId ? (DB.players.find(p => String(p.id) === dropId)?.name || dropId) : null;
+      notifResults.push({ mgrName: mgr.name, added: addP?.name || addId, dropped: dropPName, success: true });
+
       // Bump this manager to bottom of priority, then re-sort remaining queue
       const idx = waiverOrder.indexOf(mgr.id);
       if (idx !== -1) { waiverOrder.splice(idx, 1); waiverOrder.push(mgr.id); }
@@ -7637,6 +7631,10 @@ const Waiver = {
     // ── 9. Reload this user's remaining claims ────────────────────────────
     State.waiverClaims = [];
     await WaiverDB.load();
+
+    // ── 10. Write notifications for all managers ─────────────────────────
+    await NotifDB.writeWaiverResults(leagueId, notifResults);
+    await NotifDB.loadUnreadCount();
 
     App.toast(`✅ ${processed} claim${processed !== 1 ? 's' : ''} executed, ${skipped} skipped.`);
     App.render();
@@ -9110,17 +9108,17 @@ const Commissioner = {
   },
 
   async runWaivers() {
-    if (!this.isComm()) return;
+    if (!this.isComm()) { App.toast('Not commissioner.', 'error'); return; }
     const leagueId = State.myLeagues?.[State.activeLeagueIndex]?.id;
+    if (!leagueId) { App.toast('No active league found. Try reloading.', 'error'); return; }
+    if (!_supabase) { App.toast('Supabase not connected.', 'error'); return; }
     // Get a fresh count of all pending claims across the league
-    let claimCount = 0;
-    if (leagueId && _supabase) {
-      const { count } = await _supabase
-        .from('waiver_claims')
-        .select('id', { count: 'exact', head: true })
-        .eq('league_id', leagueId);
-      claimCount = count || 0;
-    }
+    const { count, error: countErr } = await _supabase
+      .from('waiver_claims')
+      .select('id', { count: 'exact', head: true })
+      .eq('league_id', leagueId);
+    if (countErr) { App.toast('Failed to count claims: ' + countErr.message, 'error'); return; }
+    const claimCount = count || 0;
     if (!claimCount) {
       App.toast('No pending claims across the league.', 'info');
       return;
@@ -10059,6 +10057,157 @@ const ChatDB = {
   },
 };
 
+// ============================================================
+// NOTIFDB — league-wide notifications stored in Supabase
+// ============================================================
+// Run this SQL once in Supabase SQL Editor:
+//
+//   create table notifications (
+//     id          uuid primary key default gen_random_uuid(),
+//     league_id   uuid references leagues(id) on delete cascade,
+//     type        text not null,           -- 'waiver_result'
+//     title       text not null,
+//     body        text not null,
+//     icon        text default '🔔',
+//     read_by     uuid[] default '{}',     -- array of user_ids who have read it
+//     created_at  timestamptz default now()
+//   );
+//   alter table notifications enable row level security;
+//   create policy "League members can read notifications"
+//     on notifications for select using (
+//       exists (
+//         select 1 from league_members
+//         where league_members.league_id = notifications.league_id
+//           and league_members.user_id = auth.uid()
+//       )
+//     );
+//   create policy "Service role can insert notifications"
+//     on notifications for insert with check (true);
+
+const NotifDB = {
+
+  _leagueId() {
+    return State.myLeagues?.[State.activeLeagueIndex]?.id || null;
+  },
+
+  // ── Fetch unread count and update the badge ──────────────────────────
+  async loadUnreadCount() {
+    const leagueId = this._leagueId();
+    if (!leagueId || !_supabase) return;
+    const userId = DB.currentUser?.id;
+    if (!userId) return;
+
+    const { data, error } = await _supabase
+      .from('notifications')
+      .select('id, read_by')
+      .eq('league_id', leagueId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) { console.error('[NotifDB] loadUnreadCount:', error.message); return; }
+
+    const unread = (data || []).filter(n => !((n.read_by || []).includes(userId))).length;
+    this._setBadge(unread);
+  },
+
+  // ── Fetch all notifications and render the panel ─────────────────────
+  async loadAndRender() {
+    const leagueId = this._leagueId();
+    const listEl   = document.getElementById('notif-list');
+    if (!listEl) return;
+
+    if (!leagueId || !_supabase) {
+      listEl.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--text-3);font-size:13px">No league loaded.</div>';
+      return;
+    }
+
+    const { data, error } = await _supabase
+      .from('notifications')
+      .select('*')
+      .eq('league_id', leagueId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      listEl.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--red);font-size:13px">Failed to load notifications.</div>';
+      return;
+    }
+
+    const userId = DB.currentUser?.id;
+
+    if (!data || data.length === 0) {
+      listEl.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--text-3);font-size:13px">No notifications yet.</div>';
+      this._setBadge(0);
+      return;
+    }
+
+    // Mark all as read
+    const unreadIds = data.filter(n => !((n.read_by || []).includes(userId))).map(n => n.id);
+    if (unreadIds.length > 0) {
+      // Update read_by for each unread notification
+      for (const id of unreadIds) {
+        const notif = data.find(n => n.id === id);
+        const newReadBy = [...new Set([...(notif.read_by || []), userId])];
+        await _supabase.from('notifications').update({ read_by: newReadBy }).eq('id', id);
+      }
+      this._setBadge(0);
+    }
+
+    listEl.innerHTML = data.map(n => {
+      const isUnread = !((n.read_by || []).includes(userId));
+      const time     = this._relTime(n.created_at);
+      const bg       = isUnread ? 'background:var(--bg-2)' : '';
+      const dotBg    = isUnread ? 'var(--green)' : 'transparent';
+      const dotBdr   = isUnread ? 'transparent' : 'var(--border)';
+      return '<div class="notif-item" style="' + bg + '">'
+           + '<div class="notif-dot" style="background:' + dotBg + ';border:1px solid ' + dotBdr + '"></div>'
+           + '<div>'
+           + '<div class="notif-text">' + n.body + '</div>'
+           + '<div class="notif-time">' + time + '</div>'
+           + '</div></div>';
+    }).join('');
+  },
+
+  // ── Write a batch of notifications (called after processClaims) ───────
+  // results: array of { userId, mgrName, added: playerName, dropped: playerName|null, success: bool }
+  async writeWaiverResults(leagueId, results) {
+    if (!leagueId || !_supabase || !results.length) return;
+
+    const rows = results.map(r => ({
+      league_id: leagueId,
+      type:      'waiver_result',
+      icon:      r.success ? '✅' : '⏭',
+      title:     r.success ? 'Waiver claim awarded' : 'Waiver claim skipped',
+      body:      r.success
+        ? '<strong>' + r.mgrName + '</strong> claimed <strong>' + r.added + '</strong>' + (r.dropped ? ' · dropped <strong>' + r.dropped + '</strong>' : '')
+        : '<strong>' + r.mgrName + "</strong>'s claim for <strong>" + r.added + '</strong> was skipped',
+      read_by:   [],
+    }));
+
+    const { error } = await _supabase.from('notifications').insert(rows);
+    if (error) console.error('[NotifDB] writeWaiverResults:', error.message);
+  },
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+  _setBadge(count) {
+    const el = document.getElementById('notif-badge-count');
+    if (!el) return;
+    if (count > 0) { el.textContent = count > 9 ? '9+' : String(count); el.style.display = ''; }
+    else           { el.style.display = 'none'; }
+  },
+
+  _relTime(iso) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1)   return 'just now';
+    if (mins < 60)  return mins + ' min ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24)   return hrs + ' hr ago';
+    const days = Math.floor(hrs / 24);
+    return days + ' day' + (days !== 1 ? 's' : '') + ' ago';
+  },
+};
+
 const WaiverDB = {
 
   _memberId() {
@@ -10391,6 +10540,7 @@ const Auth = {
       await Rosters.loadAll(active.id);
       await TradesDB.load(active.id);
       await WaiverDB.load();
+      await NotifDB.loadUnreadCount();
     }
     this._loadingState = false;
     // (Re)start global chat subscription now that memberId is guaranteed populated
