@@ -2603,6 +2603,20 @@ const DB = {
 };
 
 // ============================================================
+// CURRENT-USER HELPER
+// Returns the integer manager id for the logged-in user.
+// Falls back to 1 only if auth hasn't loaded yet (pre-login).
+// Use this everywhere instead of hard-coding id === 1.
+// ============================================================
+function myMgrId() {
+  if (DB.currentUser && DB.currentUser.id) {
+    const mgr = DB.managers.find(m => m.userId === DB.currentUser.id);
+    if (mgr) return mgr.id;
+  }
+  return 1; // safe fallback before auth loads
+}
+
+// ============================================================
 // APP STATE
 // ============================================================
 const State = {
@@ -2693,12 +2707,13 @@ const App = {
     if (players && players.length > 0) {
       DB.players = players;
       const myIds = new Set([...DB.myTeam.players, ...DB.myTeam.bench]);
+      const _myId = myMgrId();
       if (myIds.size > 0) {
-        DB.players.forEach(p => { if (myIds.has(p.id)) { p.drafted = true; p.owner = 1; } });
+        DB.players.forEach(p => { if (myIds.has(p.id)) { p.drafted = true; p.owner = _myId; } });
       }
       Object.entries(DB.rosters).forEach(([mgrId, ids]) => {
         const mid = parseInt(mgrId);
-        if (mid === 1) return;
+        if (mid === _myId) return;
         const idSet = new Set(ids);
         DB.players.forEach(p => { if (idSet.has(p.id)) { p.drafted = true; p.owner = mid; } });
       });
@@ -2805,7 +2820,7 @@ const App = {
   buildNav() {
     const sidebar = document.getElementById('sidebar-nav');
     const bnav = document.getElementById('bottom-nav');
-    const pendingTrades = DB.trades ? DB.trades.filter(t => t.to === 1 && t.status === 'pending').length : 0;
+    const pendingTrades = DB.trades ? DB.trades.filter(t => t.to === myMgrId() && t.status === 'pending').length : 0;
     sidebar.innerHTML = NAV_ITEMS.map(n => {
       const isComm = n.id === 'commissioner';
       const badge = n.id === 'trades' && pendingTrades > 0
@@ -3845,7 +3860,7 @@ const Screens = {
     <div class="section-label" style="margin-bottom:12px">Roster Strength Rankings</div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
       ${rosterSummaries.map((rs, i) => {
-        const isMe = rs.mgr.id === 1;
+        const isMe = rs.mgr.id === myMgrId();
         return `
         <div class="card" style="border:1px solid ${isMe?'rgba(34,197,94,0.3)':'var(--border)'}">
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -4494,7 +4509,7 @@ const Modals = {
     const selectorHTML = `
       <div style="position:absolute;top:100px;left:50%;transform:translateX(-50%);width:90%;max-width:380px;background:var(--bg-card);border:1px solid var(--border-bright);border-radius:var(--radius-lg);padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.5);z-index:400">
         <div style="font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:12px">Select Manager</div>
-        ${DB.managers.filter(m => m.id !== 1).map(m => `
+        ${DB.managers.filter(m => m.id !== myMgrId()).map(m => `
           <div class="league-dropdown-item" onclick="Modals.openDM(${m.id})" style="border-radius:var(--radius-sm);margin-bottom:4px">
             <div class="avatar-ring" style="width:36px;height:36px;background:${m.bg};border-color:${m.color};color:${m.color};font-size:14px">${m.name[0]}</div>
             <div class="league-info">
@@ -4903,8 +4918,7 @@ const MyTeam = {
     if (!val) { App.toast('Name cannot be empty', 'error'); return; }
     DB.myTeam.name = val;
     // Keep managers display name in sync
-    const me = DB.managers.find(m => m.id === 1);
-    if (me) me.teamName = val;
+    const me = DB.managers.find(m => m.id === myMgrId());
     // Persist team name to Supabase (fire-and-forget)
     Rosters.flush();
     App.closeModal();
@@ -5177,7 +5191,7 @@ const Home = {
     });
     return rows.map(function(row, i) {
       var m = row.m;
-      var isMe = m.id === 1;
+      var isMe = m.id === myMgrId();
       var rankNum = i + 1;
       var rankClass = rankNum <= 3 ? 'rank-' + rankNum : 'rank-other';
       var nrrColor = row.nrrRaw > 0 ? 'var(--green)' : row.nrrRaw < 0 ? 'var(--red)' : 'var(--text-2)';
@@ -5228,7 +5242,7 @@ const Home = {
         if (week.type === 'final' && week.finalLabels) {
           matchLabel = week.finalLabels[mi] || '';
         }
-        var involvesMe = match.a === 1 || match.b === 1;
+        var involvesMe = match.a === myMgrId() || match.b === myMgrId();
         var isClickable = involvesMe && (isCurrent || isPast);
         var clickAttr = isClickable
           ? 'onclick="State.matchupWeek=' + week.gw + ';App.go(\'scoring\')" style="cursor:pointer;margin-bottom:6px"'
@@ -5238,12 +5252,12 @@ const Home = {
           + '<div class="matchup-vs">'
           + '<div class="matchup-manager">'
           +   '<div class="avatar-ring" style="width:30px;height:30px;background:' + a.bg + ';border-color:' + a.color + ';color:' + a.color + ';font-size:11px;margin:0 auto 4px">' + a.name[0] + '</div>'
-          +   '<div style="font-size:12px;font-weight:' + (a.id === 1 ? '700' : '500') + '">' + a.name + '</div>'
+          +   '<div style="font-size:12px;font-weight:' + (a.id === myMgrId() ? '700' : '500') + '">' + a.name + '</div>'
           + '</div>'
           + '<div style="color:var(--text-3);font-size:11px;font-weight:800">vs</div>'
           + '<div class="matchup-manager">'
           +   '<div class="avatar-ring" style="width:30px;height:30px;background:' + b.bg + ';border-color:' + b.color + ';color:' + b.color + ';font-size:11px;margin:0 auto 4px">' + b.name[0] + '</div>'
-          +   '<div style="font-size:12px;font-weight:' + (b.id === 1 ? '700' : '500') + '">' + b.name + '</div>'
+          +   '<div style="font-size:12px;font-weight:' + (b.id === myMgrId() ? '700' : '500') + '">' + b.name + '</div>'
           + '</div>'
           + '</div>'
           + (isClickable ? '<div style="font-size:10px;color:var(--text-3);text-align:center;margin-top:4px">View matchup →</div>' : '')
@@ -5448,7 +5462,7 @@ const Draft = {
       </div>`;
 
       boardManagers.forEach((mgr, s) => {
-        const isMe   = mgr.id === 1;
+        const isMe   = mgr.id === myMgrId();
         const dimmed = isComplete && filterMgr !== 'all' && mgr.id !== parseInt(filterMgr);
 
         // Which absolute pick number does this cell represent?
@@ -5604,7 +5618,7 @@ const Draft = {
     State.drafted    = [];
     State.draftPicks = {};
     DB.managers.forEach(m => { State.draftPicks[m.id] = []; });
-    DB.players.forEach(p => { if (p.drafted && p.owner !== 1) { p.drafted = false; p.owner = null; } });
+    DB.players.forEach(p => { if (p.drafted && p.owner !== myMgrId()) { p.drafted = false; p.owner = null; } });
     State.draftPhase = 'live';
     App.initDraft();
     App.navigate('draft');
@@ -6184,7 +6198,7 @@ const Draft = {
 const Matchup = {
 
   renderPage() {
-    var myId = 1;
+    var myId = myMgrId();
 
     // ── Derive schedule context ──────────────────────────────────────────
     if (!DB.schedule || DB.schedule.length === 0) Schedule.generate();
@@ -6698,7 +6712,7 @@ const League = {
 
   managerRow(m) {
     const isExpanded = State.expandedManager === m.id;
-    const isMe = m.id === 1;
+    const isMe = m.id === myMgrId();
     const rosterIds = DB.rosters[m.id] || [];
     const roster = rosterIds.map(id => DB.players.find(p => p.id === id)).filter(Boolean);
     return `
@@ -7131,7 +7145,7 @@ var Schedule = {
   // Seed results into DB.schedule from real DB.matchups data.
   // Mock scoring has been removed — results come from Supabase scoring tables.
   seedResults() {
-    var myId = 1;
+    var myId = myMgrId();
     DB.schedule.forEach(function(entry) {
       if (entry.type !== 'group') return;
       entry.matches.forEach(function(match) {
@@ -7223,7 +7237,7 @@ const Waiver = {
 
   renderPriorityPanel() {
     var order = DB.settings.waiver.order;
-    var myId = 1;
+    var myId = myMgrId();
     var myPos = order.indexOf(myId) + 1;
     var rows = order.map(function(mgrId, i) {
       var mgr = DB.managers.find(function(m) { return m.id === mgrId; });
@@ -7585,9 +7599,9 @@ const Trades = {
       return this.renderWizard();
     }
 
-    const inbox  = DB.trades.filter(t => t.to === 1 && t.status === 'pending');
-    const sent   = DB.trades.filter(t => t.from === 1 && t.status === 'pending');
-    const history = DB.trades.filter(t => (t.to === 1 || t.from === 1) && t.status !== 'pending');
+    const inbox  = DB.trades.filter(t => t.to === myMgrId() && t.status === 'pending');
+    const sent   = DB.trades.filter(t => t.from === myMgrId() && t.status === 'pending');
+    const history = DB.trades.filter(t => (t.to === myMgrId() || t.from === myMgrId()) && t.status !== 'pending');
     const tab = State.tradeTab;
     const list = tab === 'inbox' ? inbox : tab === 'sent' ? sent : history;
 
@@ -7625,8 +7639,8 @@ const Trades = {
   },
 
   renderTradeListItem(t) {
-    const other = DB.managers.find(m => m.id === (t.from === 1 ? t.to : t.from));
-    const isIncoming = t.to === 1;
+    const other = DB.managers.find(m => m.id === (t.from === myMgrId() ? t.to : t.from));
+    const isIncoming = t.to === myMgrId();
     const offerNames = t.offer.map(id => DB.players.find(p => p.id === id)?.name?.split(' ').pop()).join(', ');
     const askNames   = t.asking.map(id => DB.players.find(p => p.id === id)?.name?.split(' ').pop()).join(', ');
     const isActive = this.selectedTradeId === t.id;
@@ -7658,8 +7672,8 @@ const Trades = {
 
   renderTradeDetail(t) {
     if (!t) return this.renderEmptyDetail();
-    const isIncoming = t.to === 1;
-    const me = DB.managers.find(m => m.id === 1);
+    const isIncoming = t.to === myMgrId();
+    const me = DB.managers.find(m => m.id === myMgrId());
     const other = DB.managers.find(m => m.id === (isIncoming ? t.from : t.to));
 
     // From my perspective: "they offer" and "they want" (incoming) OR "I offer" / "I want" (outgoing)
@@ -7787,7 +7801,7 @@ const Trades = {
 
     if (step === 1) {
       // Pick a manager
-      const others = DB.managers.filter(m => m.id !== 1);
+      const others = DB.managers.filter(m => m.id !== myMgrId());
       bodyHTML = `
       <div class="manager-pick-grid">
         ${others.map(m => `
@@ -7866,7 +7880,7 @@ const Trades = {
 
     } else if (step === 3) {
       // Review & Send
-      const me = DB.managers.find(m => m.id === 1);
+      const me = DB.managers.find(m => m.id === myMgrId());
       const myOfferPts    = State.tradeMyOffer.reduce((s,id) => s+(DB.players.find(p=>p.id===id)?.pts||0), 0);
       const theirOfferPts = State.tradeTheirOffer.reduce((s,id) => s+(DB.players.find(p=>p.id===id)?.pts||0), 0);
       const diff = myOfferPts - theirOfferPts;
@@ -8086,7 +8100,7 @@ const Trades = {
     // Save to Supabase — once resolved, promote Supabase UUID as the canonical id
     const activeLeague = State.myLeagues[State.activeLeagueIndex];
     if (activeLeague) {
-      const fromMgr = DB.managers.find(m => m.id === 1);
+      const fromMgr = DB.managers.find(m => m.id === myMgrId());
       const toMgr   = DB.managers.find(m => m.id === State.tradeTargetManager);
       if (fromMgr?.memberId && toMgr?.memberId) {
         TradesDB.insert(
@@ -8623,8 +8637,8 @@ const Commissioner = {
     const maxSlots = DB.settings.league.maxManagers;
 
     const managerRows = managers.map(mgr => {
-      const isMe = mgr.id === 1;
-      const isCommMgr = mgr.id === 1; // in prototype user 1 is commissioner
+      const isMe = mgr.id === myMgrId();
+      const isCommMgr = mgr.id === myMgrId(); // commissioner is always the current user
       return `
       <div class="card" style="margin-bottom:10px;border:1px solid ${isMe?'rgba(34,197,94,0.3)':'var(--border)'}">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -8673,9 +8687,7 @@ const Commissioner = {
     var rows = order.map(function(mgrId, i) {
       var mgr = managers.find(function(m) { return m.id === mgrId; });
       if (!mgr) return '';
-      var isMe = mgrId === 1;
-      var pos = i + 1;
-      var posColor = pos === 1 ? 'var(--green)' : pos === order.length ? 'var(--red)' : 'var(--text-3)';
+      var isMe = mgrId === myMgrId();
       var bg = isMe ? 'background:var(--green-dim);border-color:rgba(34,197,94,0.3)' : 'background:var(--bg-2);border-color:var(--border)';
       var upBtn = isComm && i > 0
         ? '<button onclick="Commissioner.moveWaiverOrder(' + i + ',-1)" class="btn btn-ghost" style="padding:2px 8px;font-size:12px">↑</button>'
@@ -10014,12 +10026,13 @@ const Rosters = {
     if (starters.length || bench.length) {
       DB.myTeam.players = starters;
       DB.myTeam.bench   = bench;
-      // Keep DB.rosters[1] in sync so draft/waiver code stays happy
-      DB.rosters[1] = [...starters, ...bench];
+      // Keep DB.rosters[myId] in sync so draft/waiver code stays happy
+      const _myId = myMgrId();
+      DB.rosters[_myId] = [...starters, ...bench];
       // Reflect ownership on the player objects
       const myIds = new Set([...starters, ...bench]);
       DB.players.forEach(p => {
-        if (myIds.has(p.id)) { p.drafted = true;  p.owner = 1; }
+        if (myIds.has(p.id)) { p.drafted = true;  p.owner = _myId; }
       });
     }
     if (data.team_name) DB.myTeam.name = data.team_name;
