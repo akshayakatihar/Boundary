@@ -10523,6 +10523,17 @@ const Auth = {
       if (active?.name)       DB.settings.league.name        = active.name;
     }
 
+    // Sanitize waiver order — remove stale IDs that don't match real managers,
+    // then reseed from manager list if the result is empty or wrong length.
+    const validMgrIds = new Set(DB.managers.map(m => m.id));
+    const cleanOrder  = (DB.settings.waiver.order || []).filter(id => validMgrIds.has(id));
+    if (cleanOrder.length !== DB.managers.length) {
+      // Reseed: reverse of manager join order (first joined = last waiver pick)
+      DB.settings.waiver.order = [...DB.managers.map(m => m.id)].reverse();
+    } else {
+      DB.settings.waiver.order = cleanOrder;
+    }
+
     // Load persisted roster from Supabase.
     // Also load if players array exists but contains IDs that might be stale integers.
     const hasRealRoster = DB.myTeam.players.length > 0 &&
