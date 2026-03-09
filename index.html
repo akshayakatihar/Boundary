@@ -7535,11 +7535,15 @@ const Waiver = {
     let skipped   = 0;
 
     // ── 5. Process the queue ──────────────────────────────────────────────
+    console.log('[processClaims] queue length:', queue.length, 'managers:', DB.managers.map(m => m.name + '/' + m.memberId));
     while (queue.length > 0) {
       const claim = queue.shift();
 
       const mgr = DB.managers.find(m => m.memberId === claim.member_id);
-      if (!mgr || !mgr.userId) { skipped++; continue; }
+      if (!mgr || !mgr.userId) {
+        console.warn('[processClaims] skipping claim — no manager found for member_id:', claim.member_id, '— known memberIds:', DB.managers.map(m => m.memberId));
+        skipped++; continue;
+      }
 
       const userId = mgr.userId;
       const addId  = String(claim.add_player_id);
