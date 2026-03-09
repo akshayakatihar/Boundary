@@ -7442,43 +7442,190 @@ const Waiver = {
     App.render();
   },
 
-  // Called at midnight processing (or by commissioner) — executes claims in priority order
-  processClaims() {
-    const claims = State.waiverClaims || [];
-    if (!claims.length) { App.toast('No pending claims to process.'); return; }
-    const maxSquad = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
-    let processed = 0;
-    claims.forEach(c => {
-      const addP  = DB.players.find(p => String(p.id) === String(c.addId));
-      if (!addP) return;
-      const currentSize = (DB.myTeam.players || []).length + (DB.myTeam.bench || []).length;
-      if (!c.dropId) {
-        // Add-only claim: skip if squad full
-        if (currentSize >= maxSquad) return;
-        DB.myTeam.bench.push(String(c.addId));
-        DB.rosters[1] = [...DB.myTeam.players, ...DB.myTeam.bench];
-        addP.drafted = true; addP.owner = 1;
-      } else {
-        // Add & Drop claim
-        const dropP = DB.players.find(p => String(p.id) === String(c.dropId));
-        if (!dropP) return;
-        DB.myTeam.players = DB.myTeam.players.filter(id => String(id) !== String(c.dropId));
-        DB.myTeam.bench   = DB.myTeam.bench.filter(id => String(id) !== String(c.dropId));
-        DB.myTeam.bench.push(String(c.addId));
-        DB.rosters[1] = [...DB.myTeam.players, ...DB.myTeam.bench];
-        addP.drafted  = true;  addP.owner  = 1;
-        dropP.drafted = false; dropP.owner = null;
-      }
-      // Move user to bottom of waiver priority
-      const order = DB.settings.waiver.order;
-      const idx = order.indexOf(1);
-      if (idx !== -1) { order.splice(idx, 1); order.push(1); }
-      Rosters.flush();
-      processed++;
+  // ── Full league-wide waiver processing ───────────────────────────────
+  // Algorithm:
+  //   - Build a queue of all pending claims sorted by current waiver priority
+  //   - Take the top claim from the queue
+  //   - Skip if: player already claimed this run, drop would make squad illegal,
+  //              squad full (add-only), or drop player not on this roster
+  //   - On success: update roster, bump manager to bottom of priority order,
+  //                 RE-SORT remaining queue with updated priority, continue
+  //   - Loop until queue empty — managers can get multiple claims per run
+  //
+  // Legality check (full squad = starters + bench):
+  //   - Min 1 WK across entire squad
+  //   - Min 5 BOW/AR across entire squad
+  async processClaims() {
+    const leagueId     = State.myLeagues?.[State.activeLeagueIndex]?.id;
+    const maxSquad     = (DB.settings.league.startersCount || 11) + (DB.settings.league.benchCount || 4);
+    const starterCount = DB.settings.league.startersCount || 11;
+
+    if (!leagueId || !_supabase) {
+      App.toast('Cannot process — no active league.', 'error');
+      return;
+    }
+
+    App.toast('⏳ Processing waiver claims…', 'info');
+
+    // ── 1. Load ALL pending claims for this league ────────────────────────
+    const { data: allClaims, error: claimErr } = await _supabase
+      .from('waiver_claims')
+      .select('*')
+      .eq('league_id', leagueId)
+      .order('priority', { ascending: true });
+
+    if (claimErr) { App.toast('Failed to load claims: ' + claimErr.message, 'error'); return; }
+    if (!allClaims || !allClaims.length) { App.toast('No pending claims to process.'); return; }
+
+    // ── 2. Load all current rosters ──────────────────────────────────────
+    const { data: rosterRows, error: rosterErr } = await _supabase
+      .from('roster_slots')
+      .select('user_id, player_ids, bench_ids')
+      .eq('league_id', leagueId);
+
+    if (rosterErr) { App.toast('Failed to load rosters: ' + rosterErr.message, 'error'); return; }
+
+    // Mutable roster map: user_id → { starters[], bench[] }
+    const rosterMap = {};
+    (rosterRows || []).forEach(r => {
+      rosterMap[r.user_id] = {
+        starters: (r.player_ids || []).map(String),
+        bench:    (r.bench_ids  || []).map(String),
+      };
     });
+
+    // ── 3. Helper: would dropping this player make the squad illegal? ─────
+    // Checks full squad (starters + bench) after the hypothetical drop.
+    // Rules: min 1 WK, min 5 BOW/AR across entire squad.
+    const getRole = id => DB.players.find(p => String(p.id) === String(id))?.role || null;
+
+    const isDropLegal = (roster, dropId) => {
+      const squadAfterDrop = [...roster.starters, ...roster.bench]
+        .filter(id => id !== dropId);
+      const wkCount    = squadAfterDrop.filter(id => getRole(id) === 'WK').length;
+      const bowArCount = squadAfterDrop.filter(id => ['BOW', 'AR'].includes(getRole(id))).length;
+      return wkCount >= 1 && bowArCount >= 5;
+    };
+
+    // ── 4. Live waiver order — mutated after each successful claim ────────
+    let waiverOrder = [...(DB.settings.waiver.order || DB.managers.map(m => m.id))];
+
+    const priorityOf = claim => {
+      const mgr = DB.managers.find(m => m.memberId === claim.member_id);
+      const pos = mgr ? waiverOrder.indexOf(mgr.id) : 999;
+      return pos === -1 ? 999 : pos;
+    };
+
+    const sortQueue = queue =>
+      queue.sort((a, b) => {
+        const pd = priorityOf(a) - priorityOf(b);
+        return pd !== 0 ? pd : a.priority - b.priority;
+      });
+
+    // Initial queue sorted by current priority
+    let queue = sortQueue([...allClaims]);
+
+    const claimedThisRun = new Set(); // players awarded this run — can't be claimed twice
+    const rosterUpdates  = {};        // user_id → final roster to write back
+    const processedIds   = [];        // claim row ids to delete from Supabase
+    let processed = 0;
+    let skipped   = 0;
+
+    // ── 5. Process the queue ──────────────────────────────────────────────
+    while (queue.length > 0) {
+      const claim = queue.shift();
+
+      const mgr = DB.managers.find(m => m.memberId === claim.member_id);
+      if (!mgr || !mgr.userId) { skipped++; continue; }
+
+      const userId = mgr.userId;
+      const addId  = String(claim.add_player_id);
+      const dropId = claim.drop_player_id ? String(claim.drop_player_id) : null;
+      const mode   = claim.mode || 'add-only';
+
+      // Player already claimed this run by someone with higher priority
+      if (claimedThisRun.has(addId)) { skipped++; continue; }
+
+      if (!rosterMap[userId]) rosterMap[userId] = { starters: [], bench: [] };
+      const roster   = rosterMap[userId];
+      const squadIds = [...roster.starters, ...roster.bench];
+
+      if (mode === 'add-only') {
+        if (squadIds.length >= maxSquad) { skipped++; continue; }
+        roster.bench.push(addId);
+
+      } else {
+        // Add & Drop
+        if (!dropId || !squadIds.includes(dropId)) { skipped++; continue; }
+        if (!isDropLegal(roster, dropId))           { skipped++; continue; }
+
+        roster.starters = roster.starters.filter(id => id !== dropId);
+        roster.bench    = roster.bench.filter(id => id !== dropId);
+        roster.bench.push(addId);
+
+        const dropP = DB.players.find(p => String(p.id) === dropId);
+        if (dropP) { dropP.drafted = false; dropP.owner = null; }
+      }
+
+      // ── Claim succeeded ───────────────────────────────────────────────
+      claimedThisRun.add(addId);
+      processedIds.push(claim.id);
+      rosterUpdates[userId] = { starters: [...roster.starters], bench: [...roster.bench] };
+
+      const addP = DB.players.find(p => String(p.id) === addId);
+      if (addP) { addP.drafted = true; addP.owner = mgr.id; }
+
+      if (userId === DB.currentUser.id) {
+        DB.myTeam.players  = roster.starters.slice(0, starterCount);
+        DB.myTeam.bench    = roster.bench;
+        DB.rosters[mgr.id] = [...roster.starters, ...roster.bench];
+      }
+
+      // Bump this manager to bottom of priority, then re-sort remaining queue
+      const idx = waiverOrder.indexOf(mgr.id);
+      if (idx !== -1) { waiverOrder.splice(idx, 1); waiverOrder.push(mgr.id); }
+      sortQueue(queue);
+
+      processed++;
+    }
+
+    if (!processed) {
+      App.toast('No claims executed — players already claimed, squads full, or illegal drops.', 'info');
+      return;
+    }
+
+    // ── 6. Write all updated rosters to Supabase ─────────────────────────
+    const upsertRows = Object.entries(rosterUpdates).map(([uid, r]) => ({
+      user_id:    uid,
+      league_id:  leagueId,
+      player_ids: r.starters,
+      bench_ids:  r.bench,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error: saveErr } = await _supabase
+      .from('roster_slots')
+      .upsert(upsertRows, { onConflict: 'user_id,league_id' });
+
+    if (saveErr) { App.toast('Roster save failed: ' + saveErr.message, 'error'); return; }
+
+    // ── 7. Delete successfully processed claim rows ───────────────────────
+    if (processedIds.length) {
+      await _supabase.from('waiver_claims').delete().in('id', processedIds);
+    }
+
+    // ── 8. Persist the final waiver priority order ────────────────────────
+    DB.settings.waiver.order = waiverOrder;
+    await _supabase
+      .from('leagues')
+      .update({ settings: { ...DB.settings, waiver: DB.settings.waiver } })
+      .eq('id', leagueId);
+
+    // ── 9. Reload this user's remaining claims ────────────────────────────
     State.waiverClaims = [];
-    WaiverDB.clearAll();
-    App.toast(`✅ ${processed} waiver claim${processed !== 1 ? 's' : ''} processed!`);
+    await WaiverDB.load();
+
+    App.toast(`✅ ${processed} claim${processed !== 1 ? 's' : ''} executed, ${skipped} skipped.`);
     App.render();
   },
 
@@ -8943,15 +9090,24 @@ const Commissioner = {
     Commissioner._persistSettings();
   },
 
-  runWaivers() {
+  async runWaivers() {
     if (!this.isComm()) return;
-    const claims = State.waiverClaims || [];
-    if (!claims.length) {
-      App.toast('No pending claims to process.', 'info');
+    const leagueId = State.myLeagues?.[State.activeLeagueIndex]?.id;
+    // Get a fresh count of all pending claims across the league
+    let claimCount = 0;
+    if (leagueId && _supabase) {
+      const { count } = await _supabase
+        .from('waiver_claims')
+        .select('id', { count: 'exact', head: true })
+        .eq('league_id', leagueId);
+      claimCount = count || 0;
+    }
+    if (!claimCount) {
+      App.toast('No pending claims across the league.', 'info');
       return;
     }
-    if (!confirm(`Process ${claims.length} pending claim${claims.length !== 1 ? 's' : ''} now? This cannot be undone.`)) return;
-    Waiver.processClaims();
+    if (!confirm(`Process ${claimCount} pending claim${claimCount !== 1 ? 's' : ''} for all managers now? This cannot be undone.`)) return;
+    await Waiver.processClaims();
     Commissioner.renderTab('waiver');
   },
 
