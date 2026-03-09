@@ -7168,13 +7168,15 @@ var Schedule = {
 // WAIVER WIRE CONTROLLER
 // ============================================================
 const Waiver = {
-  init() {
+  async init() {
     // Close any stale claim modal on page enter
     const m = document.getElementById('waiver-claim-modal');
     if (m) m.style.display = 'none';
-    State.waiverClaims = State.waiverClaims || [];
     State._claimAddId = null;
     State._claimDropId = null;
+    // Always reload claims from Supabase on entry so processed/cancelled claims disappear
+    await WaiverDB.load();
+    App.render();
   },
 
   filterList(val) {
@@ -7622,10 +7624,10 @@ const Waiver = {
 
     if (saveErr) { App.toast('Roster save failed: ' + saveErr.message, 'error'); return; }
 
-    // ── 7. Delete successfully processed claim rows ───────────────────────
-    if (processedIds.length) {
-      await _supabase.from('waiver_claims').delete().in('id', processedIds);
-    }
+    // ── 7. Delete ALL claims for this league — successful and skipped
+    // Skipped claims (player already taken, illegal drop etc.) are also cleared
+    // so users start fresh next waiver window.
+    await _supabase.from('waiver_claims').delete().eq('league_id', leagueId);
 
     // ── 8. Persist the final waiver priority order ────────────────────────
     DB.settings.waiver.order = waiverOrder;
