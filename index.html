@@ -10337,6 +10337,8 @@ const Rosters = {
       DB.rosters[mgrId] = ids;
       const idSet = new Set(ids);
       DB.players.forEach(p => { if (idSet.has(p.id)) { p.drafted = true; p.owner = mgrId; } });
+      // Sync State.drafted — ensures waiver wire hides all rostered players after refresh
+      ids.forEach(id => { if (!State.drafted.includes(id)) State.drafted.push(id); });
       // Always update DB.myTeam for the current user so trades persist after refresh
       if (row.user_id === DB.currentUser.id) {
         const sc = DB.settings.league.startersCount || 11;
