@@ -9761,9 +9761,9 @@ const Leagues = {
     // Step 1: get league members (no join — avoids FK requirement)
     const { data, error } = await _supabase
       .from('league_members')
-      .select('id, user_id, team_name, created_at')
+      .select('id, user_id, team_name')
       .eq('league_id', leagueId)
-      .order('created_at', { ascending: true });
+      .order('id', { ascending: true });
 
     if (error) { console.error('[Leagues.hydrateManagers]', error.message); return; }
 
