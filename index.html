@@ -9761,8 +9761,9 @@ const Leagues = {
     // Step 1: get league members (no join — avoids FK requirement)
     const { data, error } = await _supabase
       .from('league_members')
-      .select('id, user_id, team_name')
-      .eq('league_id', leagueId);
+      .select('id, user_id, team_name, created_at')
+      .eq('league_id', leagueId)
+      .order('created_at', { ascending: true });
 
     if (error) { console.error('[Leagues.hydrateManagers]', error.message); return; }
 
@@ -9776,10 +9777,9 @@ const Leagues = {
     const profileMap = {};
     (profileRows || []).forEach(p => { profileMap[p.id] = p.full_name; });
 
-    // Sort: current user first, then others in join order
-    const me     = data.find(m => m.user_id === currentUserId);
-    const others = data.filter(m => m.user_id !== currentUserId);
-    const ordered = [me, ...others].filter(Boolean);
+    // Sort by join time — stable across all users' sessions
+    // This ensures slot IDs are the same for everyone — critical for waiver priority
+    const ordered = [...data].filter(Boolean);  // already sorted by created_at from query
 
     // Preserve existing color/bg palette from mock managers
     const palette = DB.managers.map(m => ({ color: m.color, bg: m.bg }));
