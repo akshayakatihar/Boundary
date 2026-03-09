@@ -7535,15 +7535,11 @@ const Waiver = {
     let skipped   = 0;
 
     // ── 5. Process the queue ──────────────────────────────────────────────
-    console.log('[processClaims] queue length:', queue.length, 'managers:', DB.managers.map(m => m.name + '/' + m.memberId));
     while (queue.length > 0) {
       const claim = queue.shift();
 
       const mgr = DB.managers.find(m => m.memberId === claim.member_id);
-      if (!mgr || !mgr.userId) {
-        console.warn('[processClaims] skipping claim — no manager found for member_id:', claim.member_id, '— known memberIds:', DB.managers.map(m => m.memberId));
-        skipped++; continue;
-      }
+      if (!mgr || !mgr.userId) { skipped++; continue; }
 
       const userId = mgr.userId;
       const addId  = String(claim.add_player_id);
@@ -7582,10 +7578,16 @@ const Waiver = {
       const addP = DB.players.find(p => String(p.id) === addId);
       if (addP) { addP.drafted = true; addP.owner = mgr.id; }
 
+      // Keep State.drafted in sync so waiver wire / players screens update immediately
+      if (!State.drafted.some(id => String(id) === addId)) State.drafted.push(addId);
+      if (dropId) State.drafted = State.drafted.filter(id => String(id) !== dropId);
+
+      // Always update DB.rosters for all managers so Players screen shows correct ownership
+      DB.rosters[mgr.id] = [...roster.starters, ...roster.bench];
+
       if (userId === DB.currentUser.id) {
-        DB.myTeam.players  = roster.starters.slice(0, starterCount);
-        DB.myTeam.bench    = roster.bench;
-        DB.rosters[mgr.id] = [...roster.starters, ...roster.bench];
+        DB.myTeam.players = roster.starters.slice(0, starterCount);
+        DB.myTeam.bench   = roster.bench;
       }
 
       // Track for notifications
