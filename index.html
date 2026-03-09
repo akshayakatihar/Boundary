@@ -9788,7 +9788,8 @@ const Leagues = {
       const slot = i; // 0-based
       const displayName = member.team_name
         || profileMap[member.user_id]
-        || (slot === 0 ? DB.managers[0].name : `Manager ${i + 1}`);
+        || (DB.managers[slot] && DB.managers[slot].name && DB.managers[slot].name !== 'undefined' ? DB.managers[slot].name : null)
+        || `Manager ${i + 1}`;
 
       if (DB.managers[slot]) {
         // Update existing slot in place — preserve id, color, bg
@@ -9811,7 +9812,7 @@ const Leagues = {
 
     // Trim any excess mock slots beyond real member count so no ghost/bot slots appear
     DB.managers = DB.managers.slice(0, ordered.length);
-    console.log('[hydrateManagers] final DB.managers order:', DB.managers.map(m => m.name + ' id=' + m.id + ' memberId=' + m.memberId));
+    console.log('[hydrateManagers] ordered.length:', ordered.length, '| final managers:', DB.managers.map(m => m.name + ' id=' + m.id + ' userId=' + m.userId));
   },
 };
 
