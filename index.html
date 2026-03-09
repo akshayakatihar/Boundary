@@ -7391,12 +7391,23 @@ const Waiver = {
         const allIds = [...(DB.myTeam.players || []), ...(DB.myTeam.bench || [])]
           .map(id => String(id) !== dropId ? id : addId);
         const allPlayers = allIds.map(id => DB.players.find(p => String(p.id) === String(id))).filter(Boolean);
-        if (allPlayers.filter(p => p.role === 'WK').length < 1) {
-          App.toast('❌ Claim would leave you with no Wicket-Keeper. Choose a different drop.', 'error');
-          return;
-        }
-        if (allPlayers.filter(p => p.role === 'BOW' || p.role === 'AR').length < 5) {
-          App.toast('❌ Claim would leave you with fewer than 5 Bowlers/All-Rounders. Choose a different drop.', 'error');
+        let illegalMsg = null;
+        if (allPlayers.filter(p => p.role === 'WK').length < 1)
+          illegalMsg = '❌ You must keep at least 1 Wicket-Keeper. Choose a different player to drop.';
+        else if (allPlayers.filter(p => p.role === 'BOW' || p.role === 'AR').length < 5)
+          illegalMsg = '❌ You must keep at least 5 Bowlers/All-Rounders. Choose a different player to drop.';
+        if (illegalMsg) {
+          // Show error inside the modal so it's not hidden behind it
+          let errEl = document.getElementById('claim-error-msg');
+          if (!errEl) {
+            errEl = document.createElement('div');
+            errEl.id = 'claim-error-msg';
+            errEl.style.cssText = 'padding:10px 12px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);border-radius:var(--radius-md);font-size:12px;color:var(--red);margin-bottom:10px';
+            const modalInner = document.querySelector('#waiver-claim-modal > div');
+            const btnRow = modalInner ? modalInner.lastElementChild : null;
+            if (btnRow) modalInner.insertBefore(errEl, btnRow);
+          }
+          errEl.textContent = illegalMsg;
           return;
         }
       }
@@ -8464,7 +8475,8 @@ const Commissioner = {
   setTab(tab) {
     State.commTab = tab;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => { if (b.textContent.trim().includes(tab === 'league' ? 'League' : tab === 'scoring' ? 'Scoring' : tab === 'draft' ? 'Draft' : tab === 'managers' ? 'Managers' : 'Waiver')) b.classList.add('active'); });
+    const labelMap = { league: 'League', scoring: 'Scoring', draft: 'Draft', managers: 'Managers', waiver: 'Waiver' };
+    document.querySelectorAll('.tab-btn').forEach(b => { if (b.textContent.trim().includes(labelMap[tab] || '')) b.classList.add('active'); });
     this.renderTab(tab);
   },
 
@@ -8475,7 +8487,7 @@ const Commissioner = {
     if (tab === 'scoring')  el.innerHTML = Commissioner.tabScoring();
     if (tab === 'draft')    el.innerHTML = Commissioner.tabDraft();
     if (tab === 'managers') el.innerHTML = Commissioner.tabManagers();
-    if (tab === 'waiver')   el.innerHTML = Commissioner.tabWaiver();
+    if (tab === 'waiver')   { try { el.innerHTML = Commissioner.tabWaiver(); } catch(e) { el.innerHTML = '<div style="padding:20px;color:var(--red)">Error loading waiver tab: ' + e.message + '</div>'; console.error(e); } }
   },
 
   // ── Helpers ──────────────────────────────────────────────────
@@ -8872,18 +8884,21 @@ const Commissioner = {
 
     // Pending claims across all managers (currently only local user's claims are visible)
     const claims = State.waiverClaims || [];
+    const myMgr = DB.managers.find(m => m.userId === DB.currentUser.id) || DB.managers[0];
+    const wOrder = DB.settings.waiver.order || [];
+    const myPriority = myMgr ? wOrder.indexOf(myMgr.id) + 1 : '?';
     const claimsHTML = claims.length === 0
       ? `<div style="padding:14px;background:var(--bg-2);border-radius:var(--radius-md);font-size:12px;color:var(--text-3);text-align:center">No pending claims queued</div>`
       : claims.map((c, i) => {
           const addP  = DB.players.find(p => String(p.id) === String(c.addId));
           const dropP = DB.players.find(p => String(p.id) === String(c.dropId));
           return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-2);border-radius:var(--radius-md);border:1px solid var(--border)">
-            <div class="avatar-ring" style="width:28px;height:28px;background:${DB.managers[0]?.bg};border-color:${DB.managers[0]?.color};color:${DB.managers[0]?.color};font-size:11px;flex-shrink:0">${DB.managers[0]?.name[0]}</div>
+            <div class="avatar-ring" style="width:28px;height:28px;background:${myMgr?.bg};border-color:${myMgr?.color};color:${myMgr?.color};font-size:11px;flex-shrink:0">${myMgr?.name?.[0] || '?'}</div>
             <div style="flex:1;font-size:12px">
               <div style="color:var(--green);font-weight:600">+ ${addP?.name || '?'}</div>
-              <div style="color:var(--red);margin-top:2px">− ${dropP?.name || '?'}</div>
+              <div style="color:var(--red);margin-top:2px">− ${dropP?.name || (c.dropId ? '?' : 'no drop')}</div>
             </div>
-            <span style="font-size:10px;color:var(--text-3)">Priority #${DB.settings.waiver.order.indexOf(1)+1}</span>
+            <span style="font-size:10px;color:var(--text-3)">Priority #${myPriority}</span>
           </div>`;
         }).join('');
 
