@@ -7168,15 +7168,12 @@ var Schedule = {
 // WAIVER WIRE CONTROLLER
 // ============================================================
 const Waiver = {
-  async init() {
+  init() {
     // Close any stale claim modal on page enter
     const m = document.getElementById('waiver-claim-modal');
     if (m) m.style.display = 'none';
     State._claimAddId = null;
     State._claimDropId = null;
-    // Always reload claims from Supabase on entry so processed/cancelled claims disappear
-    await WaiverDB.load();
-    App.render();
   },
 
   filterList(val) {
