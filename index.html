@@ -2444,7 +2444,7 @@ a { text-decoration: none; color: inherit; }
 // DATABASE — MOCK DATA
 // ============================================================
 const DB = {
-  league: { name: '', tournament: 'IPL 2025', code: '' },
+  league: { name: '', tournament: 'IPL 2026', code: '' },
   currentUser: { id: null, name: '', email: '', isCommissioner: false, teamName: '', avatarUrl: null },
 
   joinableLeagues: {},  // populated by Leagues.fetchByCode() when user enters invite code
@@ -2453,7 +2453,7 @@ const DB = {
   settings: {
     league: {
       name: '',
-      tournament: 'IPL 2025',
+      tournament: 'IPL 2026',
       maxManagers: 6,
       startersCount: 11,
       benchCount: 4,
@@ -2493,6 +2493,7 @@ const DB = {
       groupMatchups: 7,    // commissioner-configurable regular-season matchup count
       // Derived: playoff matchups always added on top = semi (top4 + 5v6 + 7v8) + final (1v2 + 3v4 + 5v6 + 7v8)
       // = 2 playoff rounds for 8 teams, 1 for 6 teams etc.
+      lockDates: {},       // { [gw]: ISO datetime string } — kickoff of first match in each GW window
     },
   },
 
@@ -3403,7 +3404,7 @@ const Screens = {
 
     return `
     <div class="hero-banner">
-      <div class="hero-league">🏆 IPL 2025 · Season Active</div>
+      <div class="hero-league">🏆 IPL 2026 · Season Active</div>
       <div class="hero-title">${DB.league.name}</div>
       <div class="hero-sub">${myMgr ? myMgr.name + "'s XI" : 'Your team'}</div>
       <div class="hero-stats">
@@ -3496,7 +3497,7 @@ const Screens = {
       <div style="padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
         <div>
           <h3 style="font-family:var(--font-display);font-size:18px;font-weight:800;margin-bottom:4px">Points Table</h3>
-          <div style="font-size:12px;color:var(--text-2)">IPL 2025 Standings</div>
+          <div style="font-size:12px;color:var(--text-2)">IPL 2026 Standings</div>
         </div>
         
       </div>
@@ -3816,7 +3817,7 @@ const Screens = {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px">
       <div>
         <h2 style="font-family:var(--font-display);font-size:24px;font-weight:800;margin-bottom:4px">Draft Board</h2>
-        <div style="font-size:13px;color:var(--text-2)">IPL 2025 · Snake Draft · Completed · All ${rounds} rounds</div>
+        <div style="font-size:13px;color:var(--text-2)">IPL 2026 · Snake Draft · Completed · All ${rounds} rounds</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="pill pill-green" style="font-size:12px;padding:6px 14px">✅ Draft Complete</span>
@@ -4064,12 +4065,27 @@ const Screens = {
       ? `ℹ️ You have space for ${expectedSquad - totalInSquad} more player${expectedSquad - totalInSquad > 1 ? 's' : ''} — add them via Waiver Wire (no drop required)`
       : null;
 
-    // Countdown: minutes until next GW lock (mock: 2h 47m from now)
-    const minutesLeft = 167;
-    const hours = Math.floor(minutesLeft / 60);
-    const mins  = minutesLeft % 60;
-    const timerColor = minutesLeft < 60 ? 'var(--red)' : minutesLeft < 120 ? 'var(--gold)' : 'var(--green)';
-    const timerIcon  = minutesLeft < 60 ? '🔴' : minutesLeft < 120 ? '🟡' : '🟢';
+    // Countdown: minutes until next GW lock — derived from commissioner-set lock date
+    const currentGW = State.scoreEntryGW || State.matchupWeek || 1;
+    const lockISO = DB.settings.schedule.lockDates?.[currentGW] || DB.settings.schedule.lockDates?.[String(currentGW)];
+    let minutesLeft = null;
+    if (lockISO) {
+      minutesLeft = Math.floor((new Date(lockISO).getTime() - Date.now()) / 60000);
+    }
+    // Keep State.gameweekLocked in sync
+    State.gameweekLocked = lockISO ? (minutesLeft <= 0) : false;
+    const hours = minutesLeft !== null ? Math.floor(Math.max(0, minutesLeft) / 60) : null;
+    const mins  = minutesLeft !== null ? Math.max(0, minutesLeft) % 60 : null;
+    const timerColor = minutesLeft === null ? 'var(--text-3)'
+      : minutesLeft <= 0 ? 'var(--red)'
+      : minutesLeft < 60 ? 'var(--red)'
+      : minutesLeft < 120 ? 'var(--gold)'
+      : 'var(--green)';
+    const timerIcon = minutesLeft === null ? '⏰'
+      : minutesLeft <= 0 ? '🔒'
+      : minutesLeft < 60 ? '🔴'
+      : minutesLeft < 120 ? '🟡'
+      : '🟢';
 
     const renderSlot = (p, isBench = false) => {
       if (!p) return '';
@@ -4173,7 +4189,7 @@ const Screens = {
       </div>` : `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:var(--radius-md)">
         <span style="font-size:16px">✅</span>
-        <div style="font-size:13px;font-weight:600;color:var(--green)">Valid lineup · Ready for Gameweek 7</div>
+        <div style="font-size:13px;font-weight:600;color:var(--green)">Valid lineup · Ready for GW ${currentGW}</div>
       </div>`}
       ${squadWarning ? `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3);border-radius:var(--radius-md)">
@@ -4187,7 +4203,7 @@ const Screens = {
             <h2 style="font-family:var(--font-display);font-size:22px;font-weight:800" id="team-name-display">${DB.myTeam.name}</h2>
             <button class="btn-icon" onclick="MyTeam.editTeamName()" title="Edit team name" style="width:28px;height:28px;font-size:13px">✏️</button>
           </div>
-          <div style="font-size:13px;color:var(--text-2)">${DB.league.tournament} · Gameweek 7</div>
+          <div style="font-size:13px;color:var(--text-2)">${DB.league.tournament} · GW ${currentGW}</div>
         </div>
         <div style="display:flex;gap:20px;align-items:center">
           <div style="text-align:center">
@@ -4209,8 +4225,14 @@ const Screens = {
       <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius-md)">
         <span style="font-size:18px">${timerIcon}</span>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:${timerColor}">Lineup locks in ${hours}h ${mins}m · Gameweek 7</div>
-          <div style="font-size:11px;color:var(--text-3);margin-top:2px">Swap players before the first match kicks off</div>
+          ${State.gameweekLocked
+            ? `<div style="font-size:13px;font-weight:600;color:var(--red)">🔒 Lineup locked · GW ${currentGW} in progress</div>
+               <div style="font-size:11px;color:var(--text-3);margin-top:2px">Swaps disabled until the gameweek ends</div>`
+            : minutesLeft === null
+            ? `<div style="font-size:13px;font-weight:600;color:var(--text-3)">Lock date not set · GW ${currentGW}</div>
+               <div style="font-size:11px;color:var(--text-3);margin-top:2px">Commissioner: add a lock date in Settings → League</div>`
+            : `<div style="font-size:13px;font-weight:600;color:${timerColor}">Lineup locks in ${hours}h ${mins}m · GW ${currentGW}</div>
+               <div style="font-size:11px;color:var(--text-3);margin-top:2px">Swap players before the first match kicks off</div>`}
         </div>
       </div>
 
@@ -4588,7 +4610,7 @@ const Modals = {
         <label style="display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Tournament</label>
         <select class="input-field" id="tournament-select" style="margin-bottom:16px;background-image:url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%2394a3b8%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3e%3cpolyline points=%276 9 12 15 18 9%27%3e%3c/polyline%3e%3c/svg%3e');background-repeat:no-repeat;background-position:right 12px center;background-size:16px;appearance:none;padding-right:40px">
           <option value="">Select a tournament...</option>
-          <option value="ipl-2025">IPL 2025</option>
+          <option value="ipl-2026">IPL 2026</option>
           <option value="wc-2024">World Cup 2024</option>
           <option value="t20-blast">T20 Blast 2024</option>
           <option value="bbl">Big Bash League 2024-25</option>
@@ -8441,11 +8463,12 @@ Screens.commissioner = function() {
   const tab    = State.commTab || 'league';
 
   const tabs = [
-    { id: 'league',  label: '🏏 League',   },
-    { id: 'scoring', label: '📋 Scoring',  },
-    { id: 'draft',   label: '📅 Draft',    },
-    { id: 'managers',label: '👥 Managers', },
-    { id: 'waiver',  label: '🔄 Waiver & Trades', },
+    { id: 'league',      label: '🏏 League',       },
+    { id: 'scores',      label: '🏆 Score Entry',  },
+    { id: 'scoring',     label: '📋 Scoring Rules', },
+    { id: 'draft',       label: '📅 Draft',         },
+    { id: 'managers',    label: '👥 Managers',      },
+    { id: 'waiver',      label: '🔄 Waiver & Trades', },
   ];
 
   return `
@@ -8489,6 +8512,7 @@ const Commissioner = {
     const el = document.getElementById('comm-content');
     if (!el) return;
     if (tab === 'league')   el.innerHTML = Commissioner.tabLeague();
+    if (tab === 'scores')   { try { el.innerHTML = Commissioner.tabScoreEntry(); } catch(e) { el.innerHTML = '<div style="padding:20px;color:var(--red)">Error loading score entry: ' + e.message + '</div>'; console.error(e); } }
     if (tab === 'scoring')  el.innerHTML = Commissioner.tabScoring();
     if (tab === 'draft')    el.innerHTML = Commissioner.tabDraft();
     if (tab === 'managers') el.innerHTML = Commissioner.tabManagers();
@@ -8553,7 +8577,7 @@ const Commissioner = {
         return this.fieldRow('Tournament', s.tournament + (drafted ? ' 🔒' : ''), drafted
           ? lockNote
           : `${this.selectField('set-tournament', [
-              ['IPL 2025','IPL 2025'],['World Cup 2024','World Cup 2024'],
+              ['IPL 2026','IPL 2026'],['World Cup 2024','World Cup 2024'],
               ['T20 Blast 2024','T20 Blast 2024'],['BBL 2024-25','BBL 2024-25'],
               ['PSL 2025','PSL 2025'],
             ], s.tournament)}
@@ -8671,6 +8695,57 @@ const Commissioner = {
         + '<div style="margin-top:10px;font-size:11px;color:var(--text-3)">&#9432; Changing group matchups automatically redistributes IPL games across all matchups. The last group matchup absorbs any remainder games.</div>';
     }
 
+    // Build lock date editor rows for each group GW
+    var lockEditorHTML = '';
+    if (isComm) {
+      var lockDates = DB.settings.schedule.lockDates || {};
+      var lockRows = '';
+      for (var li = 1; li <= ss.groupMatchups; li++) {
+        var existing = lockDates[li] || lockDates[String(li)] || '';
+        // Convert stored ISO to local datetime-local value
+        var localVal = '';
+        if (existing) {
+          try {
+            var d = new Date(existing);
+            // datetime-local needs YYYY-MM-DDTHH:MM
+            localVal = d.getFullYear() + '-'
+              + String(d.getMonth()+1).padStart(2,'0') + '-'
+              + String(d.getDate()).padStart(2,'0') + 'T'
+              + String(d.getHours()).padStart(2,'0') + ':'
+              + String(d.getMinutes()).padStart(2,'0');
+          } catch(e) { localVal = ''; }
+        }
+        lockRows += '<tr style="border-bottom:1px solid var(--border)">'
+          + '<td style="padding:8px 12px;font-size:12px;font-weight:600;white-space:nowrap">GW ' + li + '</td>'
+          + '<td style="padding:8px 12px">'
+          +   '<input type="datetime-local" id="lock-date-' + li + '" value="' + localVal + '" '
+          +     'style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text-1);font-size:12px;font-family:var(--font-body);width:100%;max-width:220px">'
+          + '</td>'
+          + '<td style="padding:8px 12px">'
+          +   (existing
+              ? '<span style="font-size:11px;color:var(--green)">✓ Set</span>'
+              : '<span style="font-size:11px;color:var(--text-3)">Not set</span>')
+          + '</td>'
+          + '</tr>';
+      }
+      lockEditorHTML = '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">'
+        + '<div style="font-size:13px;font-weight:700;margin-bottom:4px">⏰ Gameweek Lock Dates</div>'
+        + '<div style="font-size:12px;color:var(--text-2);margin-bottom:12px">Set the kickoff time of the first IPL match in each gameweek window. Lineups lock automatically at this time. Add dates as the schedule is announced — leave blank for future gameweeks.</div>'
+        + '<div style="border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;margin-bottom:12px">'
+        +   '<table style="width:100%;border-collapse:collapse">'
+        +   '<thead><tr style="background:var(--bg-2)">'
+        +     '<th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-3);border-bottom:1px solid var(--border);text-align:left">GW</th>'
+        +     '<th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-3);border-bottom:1px solid var(--border);text-align:left">First Match Kickoff (your local time)</th>'
+        +     '<th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-3);border-bottom:1px solid var(--border);text-align:left">Status</th>'
+        +   '</tr></thead>'
+        +   '<tbody>' + lockRows + '</tbody>'
+        +   '</table>'
+        + '</div>'
+        + '<button class="btn btn-primary" onclick="Commissioner.saveLockDates()" style="font-size:13px">💾 Save Lock Dates</button>'
+        + '<div style="font-size:11px;color:var(--text-3);margin-top:8px">ℹ Enter times in your local timezone — the app converts automatically. All managers see the countdown in their own local time.</div>'
+        + '</div>';
+    }
+
     return '<div class="card" style="margin-top:16px">'
       + '<div style="margin-bottom:4px;font-size:15px;font-weight:700">Season Schedule</div>'
       + '<div style="font-size:12px;color:var(--text-2);margin-bottom:14px">'
@@ -8688,6 +8763,7 @@ const Commissioner = {
       +   '</table>'
       + '</div>'
       + editorHTML
+      + lockEditorHTML
       + '</div>';
   },
 
@@ -8705,6 +8781,29 @@ const Commissioner = {
     // Also update the League Hub schedule if it's visible
     var schEl = document.getElementById('home-schedule-grid');
     if (schEl) schEl.innerHTML = Home.renderScheduleGrid();
+  },
+
+  saveLockDates() {
+    if (!this.isComm()) return;
+    var ss = DB.settings.schedule;
+    if (!ss.lockDates) ss.lockDates = {};
+    var saved = 0;
+    for (var gw = 1; gw <= (ss.groupMatchups || 7); gw++) {
+      var el = document.getElementById('lock-date-' + gw);
+      if (!el) continue;
+      var val = el.value.trim();
+      if (val) {
+        // datetime-local gives local time — convert to ISO (preserves local offset)
+        var dt = new Date(val);
+        ss.lockDates[gw] = dt.toISOString();
+        saved++;
+      } else {
+        delete ss.lockDates[gw];
+      }
+    }
+    Commissioner._persistSettings();
+    Commissioner.renderTab('league');
+    App.toast('✅ Lock dates saved for ' + saved + ' gameweek' + (saved !== 1 ? 's' : ''));
   },
 
   // ── Scoring Tab ───────────────────────────────────────────────
@@ -9036,6 +9135,9 @@ const Commissioner = {
         },
         scoring: DB.settings.scoring || {},
         waiver:  DB.settings.waiver  || {},
+        schedule: Object.assign({}, DB.settings.schedule || {}, {
+          lockDates: DB.settings.schedule?.lockDates || {},
+        }),
       };
 
 
@@ -9345,7 +9447,7 @@ const Onboarding = {
         </div>` : `
         <div class="onboard-summary-card">
           <div class="onboard-summary-row"><span>League</span><span>The Boundary Boys</span></div>
-          <div class="onboard-summary-row"><span>Format</span><span>IPL 2025</span></div>
+          <div class="onboard-summary-row"><span>Format</span><span>IPL 2026</span></div>
           <div class="onboard-summary-row"><span>Draft</span><span>Snake Draft · Not yet started</span></div>
           <div class="onboard-summary-row"><span>Your Slot</span><span>#6 of 6</span></div>
         </div>`}`;
@@ -9425,7 +9527,7 @@ const Onboarding = {
       this.foundLeague = {
         id:         data.id,
         name:       data.name,
-        tournament: 'IPL 2025',
+        tournament: 'IPL 2026',
         draftType:  'Snake',
         size:       data.max_members || 6,
         filled:     '?',
@@ -9746,7 +9848,7 @@ const Leagues = {
         maxMembers: l.max_members || 2,
         meta:       `${l.max_members} managers · Draft`,
         type:       isCommissioner ? 'created' : 'joined',
-        tournament: 'IPL 2025',
+        tournament: 'IPL 2026',
         settings:   l.settings || null,
       };
     });
@@ -10514,6 +10616,24 @@ const Auth = {
           DB.settings[section] = Object.assign({}, DB.settings[section], saved[section]);
         }
       });
+      // Restore persisted match results into the schedule so Results.compute() works for all managers
+      if (saved.results && typeof saved.results === 'object') {
+        DB.schedule.forEach(se => {
+          if (se.type !== 'group') return;
+          const gwRes = saved.results[se.gw] || saved.results[String(se.gw)];
+          if (!gwRes) return;
+          se.matches.forEach(m => {
+            const apts = gwRes[m.a] ?? gwRes[String(m.a)];
+            const bpts = gwRes[m.b] ?? gwRes[String(m.b)];
+            if (apts != null && bpts != null) {
+              m.result = {};
+              m.result[m.a] = Number(apts);
+              m.result[m.b] = Number(bpts);
+            }
+          });
+        });
+        console.log('[login] restored match results for GWs:', Object.keys(saved.results));
+      }
       // Always override with ground-truth values from the leagues table row
       if (active.maxMembers) DB.settings.league.maxManagers = active.maxMembers;
       if (active.name)       DB.settings.league.name        = active.name;
@@ -10560,6 +10680,19 @@ const Auth = {
       await TradesDB.load(active.id);
       await WaiverDB.load();
       await NotifDB.loadUnreadCount();
+      // Load all historical scores and apply to player pts / weeklyPts
+      const allScores = await ScoresDB.loadAll();
+      if (allScores.length > 0) {
+        const latestGW = Math.max(...allScores.map(r => r.gameweek));
+        ScoresDB.applyToState(allScores, latestGW);
+        State.scoreEntryGW = latestGW;
+        if (!State.scoreEntryCache) State.scoreEntryCache = {};
+        allScores.forEach(r => {
+          if (!State.scoreEntryCache[r.gameweek]) State.scoreEntryCache[r.gameweek] = {};
+          State.scoreEntryCache[r.gameweek][r.player_id] = Number(r.points);
+        });
+        Commissioner._recomputeMatchups();
+      }
     }
     this._loadingState = false;
     // (Re)start global chat subscription now that memberId is guaranteed populated
@@ -11156,6 +11289,374 @@ const Legal = {
       setTimeout(() => el.remove(), 200);
     }
   }
+};
+
+// ============================================================
+// SCORESDB — read/write the `scores` table
+// Schema: id, league_id, player_id, gameweek (int), points (numeric), updated_at
+// One row per player per gameweek. Upsert on (league_id, player_id, gameweek).
+// ============================================================
+const ScoresDB = {
+
+  _leagueId() { return State.myLeagues?.[State.activeLeagueIndex]?.id || null; },
+
+  // Load all scores for the league. Returns array of {player_id, gameweek, points}.
+  async loadAll() {
+    const leagueId = this._leagueId();
+    if (!leagueId || !_supabase) return [];
+    const { data, error } = await _supabase
+      .from('scores')
+      .select('player_id, gameweek, points')
+      .eq('league_id', leagueId)
+      .order('gameweek');
+    if (error) { console.error('[ScoresDB.loadAll]', error.message); return []; }
+    return data || [];
+  },
+
+  // Save one row per player. rows = [{player_id, gameweek, points}]
+  async saveGameweek(gameweek, rows) {
+    const leagueId = this._leagueId();
+    if (!leagueId || !_supabase || !rows.length) return false;
+    const payload = rows.map(r => ({
+      league_id:   leagueId,
+      player_id:   r.player_id,
+      gameweek:    gameweek,
+      points:      r.points,
+      updated_at:  new Date().toISOString(),
+    }));
+    const { error } = await _supabase
+      .from('scores')
+      .upsert(payload, { onConflict: 'league_id,player_id,gameweek' });
+    if (error) { console.error('[ScoresDB.saveGameweek]', error.message); return false; }
+    console.log('[ScoresDB.saveGameweek] saved', payload.length, 'rows for GW', gameweek);
+    return true;
+  },
+
+  // Apply loaded scores into in-memory state:
+  //   DB.players[].pts            ← sum of all gameweek points
+  //   DB.myTeam.weeklyPts[id]     ← points for the specified "current" gameweek
+  applyToState(rows, currentGW) {
+    // Reset all pts to 0 first
+    DB.players.forEach(p => { p.pts = 0; });
+    const weekMap = {};   // player_id → points for currentGW
+    const totalMap = {};  // player_id → cumulative season points
+
+    rows.forEach(r => {
+      const pid = r.player_id;
+      totalMap[pid] = (totalMap[pid] || 0) + Number(r.points);
+      if (r.gameweek === currentGW) weekMap[pid] = Number(r.points);
+    });
+
+    DB.players.forEach(p => {
+      if (totalMap[p.id] !== undefined) p.pts = totalMap[p.id];
+    });
+    DB.myTeam.weeklyPts = weekMap;
+    console.log('[ScoresDB.applyToState] applied', rows.length, 'score rows. currentGW:', currentGW);
+  },
+};
+
+// ── Score Entry tab ──────────────────────────────────────────────────────────
+Commissioner.tabScoreEntry = function() {
+  if (!this.isComm()) {
+    return `<div class="card"><p style="font-size:13px;color:var(--text-2)">Only the commissioner can enter scores.</p></div>`;
+  }
+
+  // Determine how many gameweeks the schedule has
+  const totalGWs = DB.schedule.length || DB.settings.schedule.groupMatchups || 7;
+  const selectedGW = State.scoreEntryGW || 1;
+
+  // Build the player list: all rostered players across all managers, sorted by manager then role
+  const ROLE_ORDER = { WK: 0, BAT: 1, AR: 2, BOW: 3 };
+  const allRosteredPlayers = [];
+  DB.managers.forEach(mgr => {
+    const ids = DB.rosters[mgr.id] || [];
+    ids.forEach(pid => {
+      const p = DB.players.find(pl => String(pl.id) === String(pid));
+      if (p) allRosteredPlayers.push({ player: p, mgr });
+    });
+  });
+  // Sort by manager slot then role
+  allRosteredPlayers.sort((a, b) => {
+    if (a.mgr.id !== b.mgr.id) return a.mgr.id - b.mgr.id;
+    return (ROLE_ORDER[a.player.role] ?? 9) - (ROLE_ORDER[b.player.role] ?? 9);
+  });
+
+  // Pre-fill with existing scores for this GW from DB.myTeam.weeklyPts / player.pts
+  // We track per-GW scores in State.scoreEntryCache[gw][player_id]
+  const cache = (State.scoreEntryCache || {})[selectedGW] || {};
+
+  // Group players by manager for display
+  const byMgr = {};
+  allRosteredPlayers.forEach(({ player, mgr }) => {
+    if (!byMgr[mgr.id]) byMgr[mgr.id] = { mgr, players: [] };
+    byMgr[mgr.id].players.push(player);
+  });
+
+  const gwOptions = Array.from({ length: totalGWs }, (_, i) => i + 1)
+    .map(gw => `<option value="${gw}" ${gw === selectedGW ? 'selected' : ''}>Gameweek ${gw}</option>`)
+    .join('');
+
+  const noRosters = allRosteredPlayers.length === 0;
+
+  const mgrSections = Object.values(byMgr).map(({ mgr, players }) => {
+    const rows = players.map(p => {
+      const existing = cache[p.id] !== undefined ? cache[p.id] : '';
+      return `<tr>
+        <td style="padding:8px 12px;font-size:13px;font-weight:600">${p.name}</td>
+        <td style="padding:8px 12px"><span class="pill pill-${p.role==='BAT'?'green':p.role==='BOW'?'blue':p.role==='AR'?'gold':'purple'}" style="font-size:10px">${p.role}</span></td>
+        <td style="padding:8px 12px"><span class="pill pill-blue" style="font-size:10px">${p.team}</span></td>
+        <td style="padding:8px 12px;text-align:right">
+          <input type="number" min="0" max="500" step="1"
+            id="score-${p.id}"
+            value="${existing}"
+            placeholder="0"
+            style="width:72px;padding:5px 8px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-1);font-size:13px;font-family:var(--font-body);text-align:right"
+            oninput="Commissioner._cacheScore(${selectedGW}, '${p.id}', this.value)">
+        </td>
+      </tr>`;
+    }).join('');
+
+    return `
+    <div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="width:28px;height:28px;border-radius:50%;background:${mgr.bg};border:2px solid ${mgr.color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:${mgr.color};flex-shrink:0">${(mgr.name||'?')[0]}</div>
+        <div style="font-size:13px;font-weight:700">${mgr.name}</div>
+        <span style="font-size:11px;color:var(--text-3)">${players.length} players</span>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--bg-2)">
+              <th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;border-bottom:1px solid var(--border)">Player</th>
+              <th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;border-bottom:1px solid var(--border)">Role</th>
+              <th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;border-bottom:1px solid var(--border)">Team</th>
+              <th style="text-align:right;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;border-bottom:1px solid var(--border)">GW ${selectedGW} Pts</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="card" style="margin-bottom:16px">
+    <div style="margin-bottom:16px">
+      <div style="font-family:var(--font-display);font-size:15px;font-weight:800;margin-bottom:4px">🏆 Gameweek Score Entry</div>
+      <div style="font-size:12px;color:var(--text-2)">Enter each player's fantasy points for the selected gameweek. Points are saved to Supabase and update standings, matchup results, and the player directory automatically.</div>
+    </div>
+
+    <!-- GW selector + action buttons -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+      <select class="input-field" id="score-gw-select" style="width:auto"
+        onchange="Commissioner._changeScoreGW(parseInt(this.value))">
+        ${gwOptions}
+      </select>
+      <button class="btn btn-secondary" style="font-size:13px" onclick="Commissioner._loadScoresForGW(${selectedGW})">
+        ↻ Load Saved Scores
+      </button>
+      <button class="btn btn-primary" style="font-size:13px" onclick="Commissioner._saveScores(${selectedGW})">
+        💾 Save GW ${selectedGW} Scores
+      </button>
+    </div>
+
+    ${noRosters ? `
+    <div style="padding:32px;text-align:center;color:var(--text-3);font-size:13px">
+      <div style="font-size:32px;margin-bottom:12px">📋</div>
+      <div style="font-weight:600;margin-bottom:4px">No rostered players yet</div>
+      <div>Complete the draft first — rostered players will appear here.</div>
+    </div>` : mgrSections}
+
+    ${!noRosters ? `
+    <div style="border-top:1px solid var(--border);padding-top:16px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-primary" style="font-size:13px" onclick="Commissioner._saveScores(${selectedGW})">
+        💾 Save GW ${selectedGW} Scores
+      </button>
+    </div>` : ''}
+  </div>`;
+};
+
+// ── Score Entry helpers on Commissioner ──────────────────────────────────────
+Commissioner._changeScoreGW = function(gw) {
+  State.scoreEntryGW = gw;
+  Commissioner.renderTab('scores');
+  Commissioner._loadScoresForGW(gw);
+};
+
+Commissioner._cacheScore = function(gw, playerId, value) {
+  if (!State.scoreEntryCache) State.scoreEntryCache = {};
+  if (!State.scoreEntryCache[gw]) State.scoreEntryCache[gw] = {};
+  State.scoreEntryCache[gw][playerId] = value === '' ? '' : Number(value);
+};
+
+Commissioner._loadScoresForGW = async function(gw) {
+  const leagueId = ScoresDB._leagueId();
+  if (!leagueId || !_supabase) { App.toast('No active league', 'error'); return; }
+
+  const { data, error } = await _supabase
+    .from('scores')
+    .select('player_id, points')
+    .eq('league_id', leagueId)
+    .eq('gameweek', gw);
+
+  if (error) { App.toast('Failed to load scores: ' + error.message, 'error'); return; }
+
+  if (!State.scoreEntryCache) State.scoreEntryCache = {};
+  State.scoreEntryCache[gw] = {};
+  (data || []).forEach(r => { State.scoreEntryCache[gw][r.player_id] = r.points; });
+
+  // Update input fields in the DOM without full re-render
+  (data || []).forEach(r => {
+    const el = document.getElementById('score-' + r.player_id);
+    if (el) el.value = r.points;
+  });
+
+  App.toast(`✅ Loaded ${(data||[]).length} saved scores for GW ${gw}`);
+};
+
+Commissioner._saveScores = async function(gw) {
+  if (!this.isComm()) return;
+
+  // Collect all values from inputs
+  const rows = [];
+  DB.managers.forEach(mgr => {
+    (DB.rosters[mgr.id] || []).forEach(pid => {
+      const el = document.getElementById('score-' + pid);
+      if (!el) return;
+      const val = el.value.trim();
+      if (val === '' || isNaN(Number(val))) return;
+      rows.push({ player_id: pid, points: Number(val) });
+    });
+  });
+
+  if (!rows.length) { App.toast('No scores to save — fill in at least one field.', 'error'); return; }
+
+  const btn = document.querySelector('[onclick*="_saveScores"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+
+  const ok = await ScoresDB.saveGameweek(gw, rows);
+
+  if (btn) { btn.disabled = false; btn.textContent = `💾 Save GW ${gw} Scores`; }
+
+  if (!ok) { App.toast('Save failed — check console for details.', 'error'); return; }
+
+  // Cache what we just saved
+  if (!State.scoreEntryCache) State.scoreEntryCache = {};
+  State.scoreEntryCache[gw] = {};
+  rows.forEach(r => { State.scoreEntryCache[gw][r.player_id] = r.points; });
+
+  // Reload all scores and apply to in-memory state
+  const allScores = await ScoresDB.loadAll();
+  ScoresDB.applyToState(allScores, gw);
+
+  // Recompute matchup results from scores
+  Commissioner._recomputeMatchups();
+
+  App.toast(`✅ GW ${gw} scores saved! ${rows.length} players updated.`);
+
+  // Re-render the current page if it's scoring-related
+  if (['home','scoring','players'].includes(State.page)) App.render();
+};
+
+// Recompute DB.matchups[week].myPts / oppPts from current player scores + rosters
+Commissioner._recomputeMatchups = function() {
+  if (!DB.schedule || !DB.schedule.length) return;
+  const myId = myMgrId();
+  const sc = DB.settings.league.startersCount || 11;
+
+  DB.schedule.forEach(se => {
+    if (se.type !== 'group') return;
+    const gw = se.gw;
+    const gwScores = (State.scoreEntryCache || {})[gw] || {};
+
+    // Skip GWs with no score data at all
+    const anyScored = Object.values(gwScores).some(v => Number(v) > 0);
+    if (!anyScored) return;
+
+    // Build total points per manager for this GW (starters only)
+    const mgrTotals = {};
+    DB.managers.forEach(mgr => {
+      const starterIds = (DB.rosters[mgr.id] || []).slice(0, sc);
+      mgrTotals[mgr.id] = starterIds.reduce((sum, pid) => sum + (Number(gwScores[pid]) || 0), 0);
+    });
+
+    // Write result onto every match in this GW (all pairs, not just mine)
+    se.matches.forEach(m => {
+      if (mgrTotals[m.a] !== undefined && mgrTotals[m.b] !== undefined) {
+        m.result = {};
+        m.result[m.a] = mgrTotals[m.a];
+        m.result[m.b] = mgrTotals[m.b];
+      }
+    });
+
+    // Keep DB.matchups in sync for the Matchup screen (my match only)
+    let myMatch = null;
+    se.matches.forEach(m => { if (m.a === myId || m.b === myId) myMatch = m; });
+    if (myMatch) {
+      const oppId = myMatch.a === myId ? myMatch.b : myMatch.a;
+      DB.matchups[gw] = DB.matchups[gw] || {};
+      DB.matchups[gw].oppId  = oppId;
+      DB.matchups[gw].myPts  = mgrTotals[myId]  || 0;
+      DB.matchups[gw].oppPts = mgrTotals[oppId] || 0;
+    }
+
+    // Push weekly pts into DB.myTeam.weeklyPts so My Team shows GW points
+    const currentGW = State.scoreEntryGW || gw;
+    if (gw === currentGW) {
+      const weekMap = {};
+      (DB.rosters[myId] || []).forEach(pid => {
+        if (gwScores[pid] !== undefined) weekMap[pid] = Number(gwScores[pid]);
+      });
+      DB.myTeam.weeklyPts = weekMap;
+    }
+  });
+
+  console.log('[_recomputeMatchups] matchups updated:', Object.keys(DB.matchups));
+
+  // Persist results to Supabase so all managers see standings on refresh
+  Commissioner._persistResults();
+};
+
+// Serialise all match.result objects from DB.schedule into settings.results and save.
+Commissioner._persistResults = async function() {
+  const leagueId = State.myLeagues?.[State.activeLeagueIndex]?.id;
+  if (!leagueId || !_supabase) return;
+
+  // Build a compact results map: { [gw]: { [mgrId]: pts, ... } }
+  const resultsMap = {};
+  DB.schedule.forEach(se => {
+    if (se.type !== 'group') return;
+    const gwResults = {};
+    let hasAny = false;
+    se.matches.forEach(m => {
+      if (m.result) {
+        Object.assign(gwResults, m.result);
+        hasAny = true;
+      }
+    });
+    if (hasAny) resultsMap[se.gw] = gwResults;
+  });
+
+  // Merge into current saved settings so we don't overwrite other keys
+  const { data: lgData, error: lgErr } = await _supabase
+    .from('leagues')
+    .select('settings')
+    .eq('id', leagueId)
+    .single();
+  if (lgErr) { console.error('[_persistResults] fetch failed:', lgErr.message); return; }
+
+  const merged = Object.assign({}, lgData.settings || {}, { results: resultsMap });
+  const { error } = await _supabase
+    .from('leagues')
+    .update({ settings: merged })
+    .eq('id', leagueId);
+  if (error) { console.error('[_persistResults] save failed:', error.message); return; }
+
+  // Keep local State.myLeagues in sync
+  const lg = State.myLeagues[State.activeLeagueIndex];
+  if (lg) lg.settings = merged;
+
+  console.log('[_persistResults] saved results for GWs:', Object.keys(resultsMap));
 };
 
 // Boot only when BOTH the DOM is ready AND the Supabase SDK has loaded.
