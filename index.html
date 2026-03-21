@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="UTF-8">
 <!--
 =============================================================================
-CRICKET FANTASY LEAGUE — "THE BOUNDARY BOYS"
+CRICKET FANTASY LEAGUE — "THE BOUNDARY"
 =============================================================================
 ARCHITECTURE OVERVIEW:
   - Single-file vanilla HTML/CSS/JS prototype with hash-based client router
@@ -28,7 +28,7 @@ TECH STACK RECOMMENDATION FOR PRODUCTION:
 -->
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Boundary Boys — Cricket Fantasy</title>
+<title>Boundary — Cricket Fantasy</title>
 <!-- v2 -->
 <link rel="preconnect" href="https://fonts.googleapis.com/">
 <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
@@ -2208,7 +2208,7 @@ a { text-decoration: none; color: inherit; }
   <div class="auth-layout">
     <!-- LEFT: Branding panel -->
     <div class="auth-left">
-      <div class="auth-brand-mark">🏏 Boundary Boys</div>
+      <div class="auth-brand-mark">🏏 Boundary</div>
       <div class="auth-brand-sub">Cricket Fantasy League</div>
       <div class="auth-tagline">Build your squad.<br><span>Chase the title.</span></div>
       <p class="auth-desc">Draft your dream XI from the world's best cricketers and compete week by week with your mates in a fully featured fantasy cricket league.</p>
@@ -2242,7 +2242,7 @@ a { text-decoration: none; color: inherit; }
 
       <!-- Dynamic title -->
       <div class="auth-form-title" id="auth-title">Welcome back</div>
-      <div class="auth-form-sub" id="auth-sub">Log in to your Boundary Boys account</div>
+      <div class="auth-form-sub" id="auth-sub">Log in to your Boundary account</div>
 
       <!-- Error banner -->
       <div class="auth-error" id="auth-error"></div>
@@ -2853,7 +2853,7 @@ const App = {
       if (b) b.className = 'bnav-item' + (State.page === n.id ? ' active' : '');
     });
     const titles = { home:'League Hub', myteam:'My Team', draft:'Draft Room', scoring:'Matchup', players:'Player Directory', waiver:'Waiver Wire', trades:'Trade Center', commissioner:'Commissioner Settings' };
-    document.getElementById('page-title').textContent = titles[State.page] || 'Boundary Boys';
+    document.getElementById('page-title').textContent = titles[State.page] || 'Boundary';
   },
 
   render() {
@@ -4605,7 +4605,7 @@ const Modals = {
       
       <div style="margin-top:20px">
         <label style="display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">League Name</label>
-        <input class="input-field" placeholder="e.g., The Boundary Boys" id="league-name-input" style="margin-bottom:16px">
+        <input class="input-field" placeholder="e.g., The Boundary" id="league-name-input" style="margin-bottom:16px">
         
         <label style="display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Tournament</label>
         <select class="input-field" id="tournament-select" style="margin-bottom:16px;background-image:url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%2394a3b8%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3e%3cpolyline points=%276 9 12 15 18 9%27%3e%3c/polyline%3e%3c/svg%3e');background-repeat:no-repeat;background-position:right 12px center;background-size:16px;appearance:none;padding-right:40px">
@@ -9366,7 +9366,7 @@ const Onboarding = {
         <div class="onboard-sub">Give your league a name, choose how many managers, and pick a draft style.</div>
         <div class="onboard-field">
           <label class="onboard-label">League Name</label>
-          <input class="onboard-input" id="ob-league-name" placeholder="e.g. The Boundary Boys" value="${this.leagueName}" oninput="Onboarding.leagueName=this.value">
+          <input class="onboard-input" id="ob-league-name" placeholder="e.g. The Boundary" value="${this.leagueName}" oninput="Onboarding.leagueName=this.value">
         </div>
         <div class="onboard-field">
           <label class="onboard-label">Number of Managers</label>
@@ -9446,7 +9446,7 @@ const Onboarding = {
           <div class="onboard-code-copy">Click to copy</div>
         </div>` : `
         <div class="onboard-summary-card">
-          <div class="onboard-summary-row"><span>League</span><span>The Boundary Boys</span></div>
+          <div class="onboard-summary-row"><span>League</span><span>The Boundary</span></div>
           <div class="onboard-summary-row"><span>Format</span><span>IPL 2026</span></div>
           <div class="onboard-summary-row"><span>Draft</span><span>Snake Draft · Not yet started</span></div>
           <div class="onboard-summary-row"><span>Your Slot</span><span>#6 of 6</span></div>
@@ -10707,7 +10707,7 @@ const Auth = {
     document.getElementById('auth-signup-tab').classList.toggle('active', isSignup);
 
     document.getElementById('auth-title').textContent = isSignup ? 'Create your account' : 'Welcome back';
-    document.getElementById('auth-sub').textContent   = isSignup ? 'Join the Boundary Boys fantasy league' : 'Log in to your Boundary Boys account';
+    document.getElementById('auth-sub').textContent   = isSignup ? 'Join the Boundary fantasy league' : 'Log in to your Boundary account';
     document.getElementById('auth-submit-btn').textContent = isSignup ? 'Create Account' : 'Log In';
 
     document.getElementById('auth-name-field').style.display = isSignup ? '' : 'none';
@@ -11119,11 +11119,11 @@ const Legal = {
       date: 'Effective date: March 1, 2025',
       body: `
         <h2>1. Acceptance of Terms</h2>
-        <p>Welcome to <strong>Boundary Boys</strong> ("the App"), a fantasy cricket platform. By creating an account or using the App in any way, you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, please do not use the App.</p>
+        <p>Welcome to <strong>Boundary</strong> ("the App"), a fantasy cricket platform. By creating an account or using the App in any way, you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, please do not use the App.</p>
         <p>We may update these Terms from time to time. We'll notify you of significant changes via email or an in-app notice. Continued use after changes constitutes acceptance.</p>
 
         <h2>2. Eligibility</h2>
-        <p>You must be at least <strong>13 years of age</strong> to use Boundary Boys. By using the App you represent that you meet this requirement. If you are under 18, you represent that a parent or guardian has reviewed and agreed to these Terms on your behalf.</p>
+        <p>You must be at least <strong>13 years of age</strong> to use Boundary. By using the App you represent that you meet this requirement. If you are under 18, you represent that a parent or guardian has reviewed and agreed to these Terms on your behalf.</p>
 
         <h2>3. Your Account</h2>
         <p>You are responsible for maintaining the confidentiality of your login credentials and for all activity that occurs under your account. You agree to:</p>
@@ -11136,7 +11136,7 @@ const Legal = {
         <p>We reserve the right to suspend or terminate accounts that violate these Terms.</p>
 
         <h2>4. Fantasy Leagues & Gameplay</h2>
-        <p>Boundary Boys is a <strong>free-to-play fantasy sports platform</strong>. No real money is wagered or won through gameplay. All points, rankings, and trophies are virtual and have no monetary value.</p>
+        <p>Boundary is a <strong>free-to-play fantasy sports platform</strong>. No real money is wagered or won through gameplay. All points, rankings, and trophies are virtual and have no monetary value.</p>
         <p>You agree not to:</p>
         <ul>
           <li>Use bots, scripts, or automation to gain an unfair advantage</li>
@@ -11144,21 +11144,21 @@ const Legal = {
           <li>Exploit bugs or glitches — report them to us instead</li>
           <li>Harass, abuse, or threaten other league members</li>
         </ul>
-        <p>Commissioners have the ability to manage their leagues, including removing managers and adjusting settings. Boundary Boys is not responsible for decisions made by individual league commissioners.</p>
+        <p>Commissioners have the ability to manage their leagues, including removing managers and adjusting settings. Boundary is not responsible for decisions made by individual league commissioners.</p>
 
         <h2>5. User Content</h2>
         <p>You may submit content such as team names, chat messages, and trade notes. You retain ownership of your content, but grant us a non-exclusive, royalty-free licence to use, display, and store it for the purpose of operating the App.</p>
         <p>You agree not to post content that is unlawful, offensive, defamatory, or that infringes the rights of others. We reserve the right to remove content that violates these Terms.</p>
 
         <h2>6. Intellectual Property</h2>
-        <p>All content in the App — including the design, logo, code, and original text — is owned by or licensed to Boundary Boys. Player names, statistics, and cricket data are used for fantasy sports purposes under fair use principles and relevant data licences.</p>
+        <p>All content in the App — including the design, logo, code, and original text — is owned by or licensed to Boundary. Player names, statistics, and cricket data are used for fantasy sports purposes under fair use principles and relevant data licences.</p>
         <p>You may not reproduce, distribute, or create derivative works from our content without prior written permission.</p>
 
         <h2>7. Disclaimers</h2>
         <p>The App is provided <strong>"as is"</strong> without warranties of any kind. We do not guarantee uninterrupted service, error-free operation, or accuracy of statistics. Player performance data is sourced from third parties and may occasionally contain errors.</p>
 
         <h2>8. Limitation of Liability</h2>
-        <p>To the fullest extent permitted by law, Boundary Boys and its team shall not be liable for any indirect, incidental, or consequential damages arising from your use of the App, including but not limited to loss of data or fantasy league outcomes.</p>
+        <p>To the fullest extent permitted by law, Boundary and its team shall not be liable for any indirect, incidental, or consequential damages arising from your use of the App, including but not limited to loss of data or fantasy league outcomes.</p>
 
         <h2>9. Termination</h2>
         <p>You may delete your account at any time from your account settings. We may suspend or terminate your access if you violate these Terms, with or without notice.</p>
@@ -11176,7 +11176,7 @@ const Legal = {
       date: 'Effective date: March 1, 2025',
       body: `
         <h2>1. Introduction</h2>
-        <p><strong>Boundary Boys</strong> is committed to protecting your privacy. This Privacy Policy explains what personal information we collect, how we use it, and your rights regarding that information. By using the App, you consent to the practices described here.</p>
+        <p><strong>Boundary</strong> is committed to protecting your privacy. This Privacy Policy explains what personal information we collect, how we use it, and your rights regarding that information. By using the App, you consent to the practices described here.</p>
 
         <h2>2. Information We Collect</h2>
         <p><strong>Information you provide directly:</strong></p>
@@ -11234,7 +11234,7 @@ const Legal = {
           <li>Object to or restrict certain processing activities</li>
           <li>Data portability — receive your data in a structured, machine-readable format</li>
         </ul>
-        <p>To exercise any of these rights, email us at <strong>privacy@boundaryboys.app</strong>. We will respond within 30 days.</p>
+        <p>To exercise any of these rights, email us at <strong>privacy@boundary.app</strong>. We will respond within 30 days.</p>
 
         <h2>8. Security</h2>
         <p>We implement industry-standard security measures including encryption in transit (TLS), hashed passwords, and access controls. No system is perfectly secure; in the event of a data breach we will notify affected users as required by applicable law.</p>
@@ -11246,7 +11246,7 @@ const Legal = {
         <p>We may update this Privacy Policy periodically. We will notify you of material changes via email or an in-app notice at least 14 days before they take effect. Your continued use of the App after changes constitutes acceptance.</p>
 
         <h2>11. Contact Us</h2>
-        <p>For privacy-related questions or requests, contact our Privacy Team at <strong>privacy@boundaryboys.app</strong> or write to us at Boundary Boys, 123 Fantasy Lane, Wilmington, DE 19801, USA.</p>
+        <p>For privacy-related questions or requests, contact our Privacy Team at <strong>privacy@boundary.app</strong> or write to us at Boundary, 123 Fantasy Lane, Wilmington, DE 19801, USA.</p>
       `
     }
   },
@@ -11272,7 +11272,7 @@ const Legal = {
         </div>
         <div class="legal-body">${doc.body}</div>
         <div class="legal-footer">
-          <span class="legal-footer-note">Boundary Boys · ${doc.date}</span>
+          <span class="legal-footer-note">Boundary · ${doc.date}</span>
           <button class="legal-footer-btn" onclick="Legal.close()">Got it</button>
         </div>
       </div>`;
